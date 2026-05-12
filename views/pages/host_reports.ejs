@@ -1,0 +1,24 @@
+<div class="flex flex-col gap-8">
+    <div class="flex justify-between items-center">
+        <div>
+            <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter">Báo cáo doanh thu</h2>
+            <p class="text-slate-500 text-sm font-medium">Thống kê chi tiết dòng tiền theo thời gian</p>
+        </div>
+        <button class="bg-slate-800 text-white px-6 py-3 rounded-2xl font-bold shadow-xl hover:bg-slate-900 transition flex items-center gap-3 text-xs tracking-widest uppercase">
+            <span>📥</span> Xuất Excel
+        </button>
+    </div>
+
+    <div class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm flex flex-wrap gap-4 items-end">
+        <div class="flex-1 min-w-[200px]"><label class="block text-[10px] font-black text-slate-400 uppercase mb-2 pl-1">Cơ sở</label><select class="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 outline-none"><option>Tất cả chi nhánh</option><option>WorkHub Central Q1</option></select></div>
+        <div class="flex-1 min-w-[150px]"><label class="block text-[10px] font-black text-slate-400 uppercase mb-2 pl-1">Từ ngày</label><input type="date" value="2026-03-01" class="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700"></div>
+        <div class="flex-1 min-w-[150px]"><label class="block text-[10px] font-black text-slate-400 uppercase mb-2 pl-1">Đến ngày</label><input type="date" value="2026-03-31" class="w-full p-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700"></div>
+        <button class="bg-teal-600 text-white px-8 py-3 rounded-xl font-black shadow-lg hover:bg-teal-700 transition uppercase text-xs tracking-widest">Lọc Dữ Liệu</button>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div class="bg-white p-6 rounded-[2rem] border shadow-sm border-l-4 border-l-teal-500"><p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Tổng Doanh Thu Thực (A)</p><p class="text-3xl font-black text-slate-800">45,200,000đ</p><p class="text-[10px] text-teal-600 font-bold mt-2">+12% so với tháng trước</p></div>
+        <div class="bg-white p-6 rounded-[2rem] border shadow-sm border-l-4 border-l-amber-500"><p class="text-[10px] text-slate-400 font-black uppercase tracking-widest mb-2">Đã thu từ Cọc (30%)</p><p class="text-3xl font-black text-slate-800">12,500,000đ</p></div>
+        <div class="bg-white p-6 rounded-[2rem] border shadow-sm border-l-4 border-l-red-500 bg-red-50/30"><p class="text-[10px] text-red-500 font-black uppercase tracking-widest mb-2">Tiền tiềm năng chưa thu (B)</p><p class="text-3xl font-black text-red-600">8,400,000đ</p><p class="text-[9px] text-slate-500 font-bold italic mt-2">Phần 70% còn lại của khách chưa tới</p></div>
+    </div>
+</div>

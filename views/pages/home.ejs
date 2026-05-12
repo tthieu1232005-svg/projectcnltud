@@ -1,0 +1,23 @@
+<!-- Trang chủ -->
+<div class="relative h-64 rounded-3xl overflow-hidden mb-10 flex items-center justify-center text-center shadow-lg">
+    <img src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=2069" class="absolute inset-0 w-full h-full object-cover" alt="Văn phòng">
+    <div class="absolute inset-0 hero-gradient"></div>
+    <div class="relative z-10 text-white p-6">
+        <h2 class="text-3xl font-bold mb-2">Tìm kiếm không gian làm việc</h2>
+        <p class="mb-6 opacity-90 font-light text-teal-50">Linh hoạt, tiện nghi và chuyên nghiệp</p>
+        <div class="bg-white p-2 rounded-2xl shadow-xl flex gap-2 max-w-xl mx-auto border border-teal-100">
+            <input type="text" placeholder="Bạn muốn làm việc ở đâu?" class="flex-1 px-4 py-2 text-slate-800 rounded-xl focus:outline-none text-sm border-none">
+            <button onclick="navigateTo('search')" class="bg-amber-500 hover:bg-amber-600 text-white px-6 py-2 rounded-xl font-bold transition text-sm">TÌM KIẾM</button>
+        </div>
+    </div>
+</div>
+
+<h3 class="text-xl font-bold mb-6 text-slate-800 underline decoration-teal-500 decoration-4 underline-offset-8 font-black uppercase tracking-tighter">Cơ sở nổi bật</h3>
+<div class="grid md:grid-cols-3 gap-6">
+    <div class="bg-white rounded-2xl border p-4 hover:shadow-md transition cursor-pointer shadow-sm" onclick="navigateTo('detail')">
+        <img src="https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&q=80&w=600" class="rounded-xl w-full h-32 object-cover mb-4">
+        <h4 class="font-bold text-slate-800">WorkHub Central Q1</h4>
+        <div class="flex text-amber-500 text-[10px] my-2">4.9 ★★★★★</div>
+        <button class="w-full py-2 bg-teal-50 text-teal-600 font-bold rounded-lg text-xs">Xem chi tiết</button>
+    </div>
+</div>
