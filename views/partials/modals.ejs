@@ -36,15 +36,31 @@
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Tên/Mã Không gian</label>
                 <input type="text" placeholder="VD: Phòng họp 103" class="w-full bg-transparent border-none p-0 text-sm font-bold focus:ring-0 outline-none text-slate-800">
             </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Hình ảnh minh họa</label>
+                <label class="mt-2 h-20 border-2 border-dashed border-slate-200 rounded-xl flex items-center justify-center text-slate-400 font-bold text-[10px] uppercase cursor-pointer hover:border-teal-500 transition">
+                    + Chọn ảnh
+                    <input type="file" accept="image/*" class="hidden">
+                </label>
+            </div>
             <div class="grid grid-cols-2 gap-4">
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Loại</label>
                     <select class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800"><option>Phòng họp</option><option>Chỗ ngồi tự do</option></select>
                 </div>
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Giá / Giờ</label>
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Giá niêm yết / Giờ</label>
                     <input type="number" placeholder="250000" class="w-full bg-transparent border-none p-0 text-sm font-bold focus:ring-0 outline-none text-slate-800">
                 </div>
+            </div>
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Trạng thái</label>
+                <select class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800">
+                    <option value="ready">Sẵn sàng</option>
+                    <option value="preparing">Đang chuẩn bị</option>
+                    <option value="occupied">Có khách</option>
+                    <option value="suspended">Tạm ngừng hoạt động</option>
+                </select>
             </div>
             <button onclick="closeModal('modal-add-space'); showToast('Đã thêm không gian mới!');" class="w-full mt-4 bg-teal-600 text-white py-4 rounded-xl font-black uppercase text-xs tracking-widest shadow-lg hover:bg-teal-700 transition">
                 Lưu Không Gian

@@ -5,7 +5,11 @@ const pageLabels = { 'home': 'Trang Chủ', 'search': 'Kết Quả Tìm Kiếm',
 const menus = { 'guest': [], 'customer': [{ id: 'home', label: 'Trang chủ', icon: '🏠' }, { id: 'history', label: 'Lịch sử đặt', icon: '📅' }, { id: 'payment_history', label: 'Lịch sử ví', icon: '💳' }, { id: 'profile', label: 'Hồ sơ', icon: '👤' }], 'host': [{ id: 'host_dashboard', label: 'Dashboard', icon: '📊' }, { id: 'host_spaces', label: 'Quản lý không gian', icon: '🏢' }, { id: 'host_bookings', label: 'Đơn đặt chỗ', icon: '📋' }, { id: 'host_reports', label: 'Báo cáo', icon: '💰' }, { id: 'host_payments', label: 'Lịch sử tiền', icon: '💳' }, { id: 'host_profile', label: 'Hồ sơ', icon: '👤' }] };
 
 const facilitySpaces = { 'central': [{id: '101', type: 'Phòng đơn', status: 'occupied', price: '250.000đ'}, {id: '102', type: 'Phòng đơn', status: 'ready', price: '250.000đ'}, {id: 'A-01', type: 'Ghế ngồi', status: 'preparing', price: '35.000đ'}, {id: 'A-02', type: 'Ghế ngồi', status: 'suspended', price: '35.000đ'}] };
-const hostData = { 'central': { rev: '3.4M', book: 18, occ: 7, rooms: 12, pot: '2.8M', potCount: 5, recent: [{name: 'Nguyễn Văn A', room: '101', time: '14:00-16:00', status: 'paid', paid: '500k', rem: '500k'}, {name: 'Lê Văn B', room: 'A04', time: '09:00-11:00', status: 'deposit', paid: '150k', rem: '350k'}], mini: [{id: '101', s: 'occupied'}, {id: '102', s: 'booked'}, {id: 'A1', s: 'available'}, {id: 'A2', s: 'available'}] } };
+const hostData = {
+    all: { rev: '12.5M', book: 42, occ: 128, rooms: 24, pot: '5.2M', recent: [{name: 'Nguyễn Văn A', room: '101', time: '14:00-16:00', status: 'paid', paid: '500k', rem: '500k'}, {name: 'Lê Văn B', room: 'A04', time: '09:00-11:00', status: 'deposit', paid: '150k', rem: '350k'}, {name: 'Trần Thị C', room: '203', time: '10:00-12:00', status: 'paid', paid: '800k', rem: '0'}], mini: [{id: '101', s: 'occupied'}, {id: '102', s: 'booked'}, {id: 'A1', s: 'available'}, {id: 'A2', s: 'available'}, {id: '201', s: 'occupied'}] },
+    q1: { rev: '8.1M', book: 28, occ: 86, rooms: 16, pot: '3.4M', recent: [{name: 'Nguyễn Văn A', room: '101', time: '14:00-16:00', status: 'paid', paid: '500k', rem: '500k'}, {name: 'Lê Văn B', room: 'A04', time: '09:00-11:00', status: 'deposit', paid: '150k', rem: '350k'}], mini: [{id: '101', s: 'occupied'}, {id: '102', s: 'booked'}, {id: 'A1', s: 'available'}, {id: 'A2', s: 'available'}] },
+    q3: { rev: '4.4M', book: 14, occ: 42, rooms: 8, pot: '1.8M', recent: [{name: 'Phạm Văn D', room: '301', time: '13:00-15:00', status: 'deposit', paid: '200k', rem: '400k'}], mini: [{id: '301', s: 'occupied'}, {id: '302', s: 'available'}, {id: '303', s: 'booked'}] }
+};
 
 // Khôi phục trạng thái từ LocalStorage để Demo MVC hoạt động trơn tru
 let currentRole = localStorage.getItem('workhub_role') || 'guest';
@@ -157,8 +161,24 @@ function handleLoginSubmit() {
 // ==========================================
 // 4. LOGIC LUỒNG KHÁCH HÀNG (CUSTOMER)
 // ==========================================
-function checkAvailableSlots() { const c = document.getElementById('available-slots-container'), l = document.getElementById('available-slots-list'); if(c) c.classList.remove('hidden'); const seats = [{ id: '101', type: 'Phòng' }, { id: 'A-04', type: 'Ghế' }]; if(l) l.innerHTML = seats.map(s => `<div onclick="selectSeat('${s.id}', this)" class="available-seat-item p-3 rounded-xl text-center"><p class="text-[9px] font-black uppercase text-slate-400">${s.type}</p><p class="text-sm font-bold text-slate-800">${s.id}</p></div>`).join(''); }
-function selectSeat(id, el) { selectedSeat = id; document.querySelectorAll('.available-seat-item').forEach(i => i.classList.remove('selected')); el.classList.add('selected'); document.getElementById('booking-summary').classList.remove('hidden'); }
+function checkAvailableSlots() {
+    const c = document.getElementById('available-slots-container');
+    if (c) c.classList.remove('hidden');
+}
+
+function selectRoomCard(cardEl) {
+    document.querySelectorAll('.room-card').forEach(c => {
+        c.classList.remove('border-2', 'border-teal-500');
+        c.classList.add('border', 'border-slate-200');
+    });
+    cardEl.classList.remove('border', 'border-slate-200');
+    cardEl.classList.add('border-2', 'border-teal-500');
+    selectedSeat = cardEl.dataset.roomId || cardEl.querySelector('.font-bold')?.innerText;
+    const summary = document.getElementById('booking-summary');
+    if (summary) summary.classList.remove('hidden');
+}
+
+function selectSeat(id, el) { selectRoomCard(el); selectedSeat = id; }
 function checkAuthAndGoToPayment() { if(!isLoggedIn) { alert("Vui lòng đăng nhập để đặt chỗ!"); navigateTo('login'); return; } navigateTo('payment'); }
 function setPaymentType(type) { 
     const area = document.getElementById('qr-area'); if(!area) return;
@@ -194,9 +214,11 @@ function switchBranch(branchId) {
     document.querySelectorAll('.branch-tab').forEach(t => t.classList.remove('active')); 
     const tab = document.getElementById(`tab-${branchId}`); if (tab) tab.classList.add('active'); 
     const d = hostData[branchId]; if(!d || !document.getElementById('stat-revenue')) return; 
-    document.getElementById('stat-revenue').innerText = d.rev; document.getElementById('stat-bookings').innerText = d.book; document.getElementById('stat-occupied').innerText = d.occ; document.getElementById('stat-rooms').innerText = d.rooms; document.getElementById('stat-potential').innerText = d.pot; document.getElementById('stat-potential-count').innerText = `(${d.potCount} đơn chờ)`; 
+    document.getElementById('stat-revenue').innerText = d.rev; document.getElementById('stat-bookings').innerText = d.book; document.getElementById('stat-occupied').innerText = d.occ; document.getElementById('stat-rooms').innerText = d.rooms; document.getElementById('stat-potential').innerText = d.pot; 
     document.getElementById('host-recent-table').innerHTML = d.recent.map(r => `<tr class="border-b border-slate-50"><td class="p-3 font-bold text-slate-700">${r.name}</td><td class="p-3">${r.room}</td><td class="p-3">${r.time}</td><td class="p-3"><span class="px-2 py-0.5 rounded-full font-black text-[10px] uppercase ${r.status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-blue-100 text-blue-700'}">${r.status === 'paid' ? 'Đã thanh toán' : 'Đã cọc'}</span></td><td class="p-3 font-medium"><span class="text-teal-600">${r.paid}</span>/<span class="text-slate-300">${r.rem}</span></td></tr>`).join(''); 
-    document.getElementById('host-floor-plan-mini').innerHTML = d.mini.map(s => `<div class="floor-plan-item status-${s.s} shadow-sm">${s.id}</div>`).join(''); 
+    const roomStatusClass = { available: 'bg-emerald-100 border border-emerald-200/80 text-emerald-800', booked: 'bg-amber-100 border border-amber-200/80 text-amber-800', occupied: 'bg-red-100 border border-red-200/80 text-red-800' };
+    const miniEl = document.getElementById('host-floor-plan-mini');
+    if (miniEl) miniEl.innerHTML = d.mini.map(s => `<div class="aspect-square min-h-[2.25rem] rounded-lg flex items-center justify-center text-[10px] font-bold ${roomStatusClass[s.s] || 'bg-slate-100 text-slate-600'}">${s.id}</div>`).join(''); 
 }
 
 function initHostCharts() { 
@@ -208,10 +230,17 @@ function initHostCharts() {
     if(ctx3) charts.pot = new Chart(ctx3, { type: 'bar', indexAxis: 'y', data: { labels: ['02/04', '03/04', '04/04'], datasets: [{ data: [500000, 0, 1000000], backgroundColor: '#fb7185', borderRadius: 4 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } } }); 
 }
 
-function openFacilityMgmt(facId) { document.getElementById('space-mgr-layer-1').classList.add('hidden'); document.getElementById('space-mgr-layer-2').classList.remove('hidden'); const tbody = document.getElementById('spaces-list-body'); const spaces = facilitySpaces[facId] || []; tbody.innerHTML = spaces.map(s => { let statusLabel = s.status === 'occupied' ? 'Có khách' : (s.status === 'preparing' ? 'Đang chuẩn bị' : (s.status === 'ready' ? 'Sẵn sàng' : 'Tạm ngừng')); return `<tr class="border-b border-slate-50 hover:bg-slate-50 transition"><td class="p-4 font-black text-slate-700">${s.id}</td><td class="p-4 text-slate-500">${s.type}</td><td class="p-4"><span class="px-2 py-1 rounded-lg text-[9px] uppercase font-black status-${s.status}">${statusLabel}</span></td><td class="p-4"><button onclick="openSpaceDetail('${s.id}')" class="text-teal-600 underline font-black">Chi tiết</button></td></tr>`; }).join(''); }
-function openSpaceDetail(spaceId) { document.getElementById('space-mgr-layer-2').classList.add('hidden'); document.getElementById('space-mgr-layer-3').classList.remove('hidden'); document.getElementById('detail-space-title').innerText = `Chi tiết: ${spaceId}`; document.getElementById('space-schedule-body').innerHTML = `<tr class="border-b border-slate-50"><td class="p-4 font-black text-slate-700">Nguyễn Văn An</td><td class="p-4">26/03/26 14:00</td><td class="p-4">16:00</td><td class="p-4 text-teal-600 font-bold">150.000đ (Cọc 30%)</td></tr>`; }
-function backToLayer1() { document.getElementById('space-mgr-layer-1').classList.remove('hidden'); document.getElementById('space-mgr-layer-2').classList.add('hidden'); document.getElementById('space-mgr-layer-3').classList.add('hidden'); }
-function backToLayer2() { document.getElementById('space-mgr-layer-2').classList.remove('hidden'); document.getElementById('space-mgr-layer-3').classList.add('hidden'); }
+function openSpaceDetail(spaceId) {
+    if (typeof showHostSpaceLayer === 'function') showHostSpaceLayer('space-mgr-layer-3');
+    else {
+        document.getElementById('space-mgr-layer-2')?.classList.add('hidden');
+        document.getElementById('space-mgr-layer-3')?.classList.remove('hidden');
+    }
+    const title = document.getElementById('detail-space-title');
+    if (title) title.innerText = `Chi tiết: ${spaceId}`;
+    const schedule = document.getElementById('space-schedule-body');
+    if (schedule) schedule.innerHTML = `<tr class="border-b border-slate-50"><td class="p-4 font-black text-slate-700">Nguyễn Văn An</td><td class="p-4">26/03/26 14:00</td><td class="p-4">16:00</td><td class="p-4 text-teal-600 font-bold">150.000đ (Cọc 30%)</td></tr>`;
+}
 
 // ==========================================
 // KHỞI TẠO KHI TẢI TRANG
@@ -228,7 +257,10 @@ window.onload = () => {
     
     // Nếu đang đứng ở trang Host Dashboard thì kích hoạt biểu đồ
     if(currentPath === '/host/dashboard') {
-        switchBranch('central');
+        switchBranch('all');
         setTimeout(initHostCharts, 100);
+    }
+    if (currentPath === '/host/spaces' && typeof initHostSpacesPage === 'function') {
+        initHostSpacesPage();
     }
 };

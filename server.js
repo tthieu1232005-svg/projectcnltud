@@ -5,78 +5,81 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 
-// 1. Cấu hình thư mục chứa tài nguyên tĩnh (CSS, JS, Images)
+// Tài nguyên tĩnh: dùng chung (public) + Host (Host/public)
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'Host/public')));
 
-// 2. Cấu hình View Engine (EJS) và Layout
+// View Engine: root project — Customer/, Host/, views/ (layout & partials dùng chung)
 app.use(expressLayouts);
 app.set('view engine', 'ejs');
-// Chỉ định file layout mặc định (chính là views/layout.ejs của bạn)
-app.set('layout', 'layout'); 
+app.set('views', path.join(__dirname));
+app.set('layout', 'views/layout');
 
-// 3. Khai báo các Routes (Bộ định tuyến)
-// --- Luồng Khách hàng ---
+// --- Luồng Khách hàng (Customer) ---
 app.get('/', (req, res) => {
-    res.render('pages/home'); // Tương ứng views/pages/home.ejs
+    res.render('Customer/pages/home');
 });
 
 app.get('/search', (req, res) => {
-    res.render('pages/search');
+    res.render('Customer/pages/search');
 });
 
 app.get('/detail', (req, res) => {
-    res.render('pages/detail');
+    res.render('Customer/pages/detail');
 });
 
 app.get('/payment', (req, res) => {
-    res.render('pages/payment');
+    res.render('Customer/pages/payment');
 });
 
 app.get('/history', (req, res) => {
-    res.render('pages/history');
+    res.render('Customer/pages/history');
 });
 
 app.get('/payment_history', (req, res) => {
-    res.render('pages/payment_history');
+    res.render('Customer/pages/payment_history');
 });
 
-// 1. Hồ sơ Khách hàng
 app.get('/profile', (req, res) => {
-    res.render('pages/customer_profile');
+    res.render('Customer/pages/profile');
 });
 
-// 2. Hồ sơ Chủ cơ sở
-app.get('/host/profile', (req, res) => {
-    res.render('pages/host_profile');
-});
-
-// --- Luồng Dùng Chung ---
+// --- Luồng Dùng chung (đặt trong Customer) ---
 app.get('/login', (req, res) => {
-    res.render('pages/login');
+    res.render('Customer/pages/login');
 });
+
 app.get('/register', (req, res) => {
-    res.render('pages/register');
+    res.render('Customer/pages/register');
 });
+
 // --- Luồng Chủ cơ sở (Host) ---
+app.get('/host/profile', (req, res) => {
+    res.render('Host/pages/profile');
+});
+
 app.get('/host/dashboard', (req, res) => {
-    res.render('pages/host_dashboard');
+    res.render('Host/pages/dashboard');
 });
 
 app.get('/host/spaces', (req, res) => {
-    res.render('pages/host_spaces');
+    res.render('Host/pages/spaces');
 });
 
 app.get('/host/bookings', (req, res) => {
-    res.render('pages/host_bookings');
+    res.render('Host/pages/bookings');
 });
+
 app.get('/host/reports', (req, res) => {
-    res.render('pages/host_reports');
+    res.render('Host/pages/reports');
 });
 
 app.get('/host/payments', (req, res) => {
-    res.render('pages/host_payments');
+    res.render('Host/pages/payments');
 });
-// 4. Khởi động Server
+
+// --- Admin: (chưa triển khai) ---
+
 app.listen(PORT, () => {
     console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
     console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
