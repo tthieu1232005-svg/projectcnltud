@@ -1,6 +1,4 @@
-// ==========================================
 // QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
-// ==========================================
 
 const DEFAULT_FACILITIES = {
     central: {
@@ -236,7 +234,7 @@ function addFacilitySpaceRow() {
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Giá niêm yết / Giờ</label>
                 <input type="text" data-field="price" placeholder="250000" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-teal-600">
             </div>
-            <div class="p-3 bg-white rounded-xl border border-slate-100">
+            <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Trạng thái</label>
                 <select data-field="status" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800">
                     <option value="ready">Sẵn sàng</option>
