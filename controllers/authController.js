@@ -1,4 +1,5 @@
 const crypto = require('crypto');
+const jwt = require('jsonwebtoken'); // Thêm thư viện cấp thẻ JWT
 const User = require('../models/User');
 const CustomerProfile = require('../models/Customer_Profile');
 const HostProfile = require('../models/Host_Profile');
@@ -75,12 +76,30 @@ async function loginUser(req, res) {
 
     const normalizedEmail = sanitizeEmail(email);
     const user = await User.findOne({ email: normalizedEmail });
+    
+    // Kiểm tra user có tồn tại và mật khẩu có khớp mã hash không
     if (!user || user.passwordHash !== hashPassword(password)) {
       return res.status(401).json({ error: 'Email hoặc mật khẩu không chính xác.' });
     }
 
+    // --- BẮT ĐẦU CẤP TOKEN ---
+    // Đóng gói thông tin cơ bản vào thẻ
+    const payload = {
+        _id: user._id,
+        role: user.role
+    };
+
+    // Ký xác nhận thẻ bằng Secret Key trong file .env, hạn dùng 1 ngày
+    const token = jwt.sign(
+        payload,
+        process.env.JWT_SECRET,
+        { expiresIn: '1d' }
+    );
+    // --- KẾT THÚC CẤP TOKEN ---
+
     return res.json({
       message: 'Đăng nhập thành công.',
+      token: token, // Trả token về cho Frontend lưu trữ
       user: {
         id: user._id,
         email: user.email,
@@ -94,6 +113,8 @@ async function loginUser(req, res) {
 }
 
 function logoutUser(req, res) {
+  // Với JWT, đăng xuất thường do Frontend tự xóa token ở localStorage/cookie
+  // Backend chỉ cần trả về thông báo thành công là đủ
   return res.json({ message: 'Đăng xuất thành công.' });
 }
 

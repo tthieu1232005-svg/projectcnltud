@@ -33,19 +33,28 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+
+// ==========================================
+// KHAI BÁO CÁC API ROUTES (Xử lý dữ liệu ngầm)
+// ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/hosts', hostRoutes);
 app.use('/api/admin', adminRoutes);
 
 
-
-
-// View Engine: root project — Customer/, Host/, views/ (layout & partials dùng chung)
+// ==========================================
+// CẤU HÌNH VIEW ENGINE (Render Giao diện EJS)
+// ==========================================
 app.use(expressLayouts);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('layout', 'layout');
+
+
+// ==========================================
+// KHAI BÁO CÁC WEB ROUTES (Điều hướng trang)
+// ==========================================
 
 // --- Luồng Khách hàng (Customer) ---
 app.get('/', (req, res) => {
@@ -76,7 +85,7 @@ app.get('/profile', (req, res) => {
     res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
 
-// --- Luồng Dùng chung (đặt trong Customer) ---
+// --- Luồng Dùng chung (Đăng nhập / Đăng ký) ---
 app.get('/login', (req, res) => {
     res.render('customer/login');
 });
@@ -112,7 +121,9 @@ app.get('/host/payments', (req, res) => {
 
 // --- Admin: (chưa triển khai) ---
 
-// --- Middleware xử lý lỗi ---
+// ==========================================
+// MIDDLEWARE XỬ LÝ LỖI TỔNG
+// ==========================================
 app.use((err, req, res, next) => {
     console.error('❌ Lỗi server:', err);
     res.status(err.status || 500).json({
@@ -120,5 +131,3 @@ app.use((err, req, res, next) => {
         message: err.message || 'Đã xảy ra lỗi server'
     });
 });
-
-

@@ -31,7 +31,7 @@ const bookingSchema = new mongoose.Schema({
           , 'cancelled'],//DA HUY - Host nhan nut huy va Now < EndTime
     default: 'confirmed'
   },
-  CreatedAt: {
+  createdAt: {
     type: Date,
     required: true
   },

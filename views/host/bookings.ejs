@@ -17,10 +17,18 @@
                 <div class="booking-filter-tab cursor-pointer px-4 py-2 rounded-xl text-sm font-bold text-slate-500 hover:bg-white transition-all" onclick="filterHostBookings('in-use', this)">Đang dùng</div>
                 <div class="booking-filter-tab cursor-pointer px-4 py-2 rounded-xl text-sm font-bold text-slate-500 hover:bg-white transition-all" onclick="filterHostBookings('completed', this)">Lịch sử</div>
             </div>
-            <div class="relative w-full md:w-72">
-                <span class="absolute inset-y-0 left-4 flex items-center text-slate-400">🔍</span>
-                <input type="text" placeholder="Tìm tên khách, mã đơn..." class="w-full pl-10 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm font-medium">
-            </div>
+            <div class="relative w-full md:w-80 flex items-center bg-slate-50 border border-slate-200 rounded-2xl p-1 focus-within:border-teal-500 transition-all">
+    <input type="text" 
+           id="booking-search-input" 
+           placeholder="Tìm email khách, mã đơn..." 
+           class="w-full pl-3 pr-12 py-2 bg-transparent border-none outline-none text-sm font-medium text-slate-700">
+    
+    <button type="button" 
+            onclick="handleBookingSearch()" 
+            class="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 flex items-center justify-center bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition shadow-md active:scale-95">
+        🔍
+    </button>
+</div>
         </div>
     </div>
     <div class="bg-white rounded-[2rem] border border-slate-100 shadow-sm overflow-hidden">
