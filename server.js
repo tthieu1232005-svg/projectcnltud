@@ -7,7 +7,7 @@ const { connectDB } = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const hostRoutes = require('./routes/hostRoutes');
-const adminRoutes = require('./routes/adminroutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -119,7 +119,11 @@ app.get('/host/payments', (req, res) => {
     res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
-// --- Admin: (chưa triển khai) ---
+/// --- Admin: (Giao diện) ---
+app.get('/admin/dashboard', (req, res) => {
+    // Truyền thêm file admin-main.js vào layout
+    res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
 
 // ==========================================
 // MIDDLEWARE XỬ LÝ LỖI TỔNG
