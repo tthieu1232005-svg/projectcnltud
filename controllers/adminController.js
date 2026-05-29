@@ -36,13 +36,14 @@ async function getAdminDashboard(req, res) {
 
 async function listUsers(req, res) {
   try {
-    const users = await User.find().select('-passwordHash').lean();
+    const users = await User.find().select('-PasswordHash').lean(); // Lưu ý: PasswordHash viết hoa theo Model của bạn
     return res.json({ users });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
 
+// Gom tất cả vào 1 module.exports duy nhất
 module.exports = {
   getAdminDashboard,
   listUsers
