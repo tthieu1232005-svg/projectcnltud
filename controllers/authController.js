@@ -1,5 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
+const jwt = require('jsonwebtoken'); // Thêm thư viện cấp thẻ JWT
 const User = require('../models/User');
 // Lưu ý: Đảm bảo tên file trong thư mục models của bạn khớp với 2 dòng require này
 const CustomerProfile = require('../models/Customer_Profile'); 

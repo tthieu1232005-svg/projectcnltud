@@ -323,63 +323,278 @@ function backToLayer1() {
 function backToLayer2() {
     showHostSpaceLayer('space-mgr-layer-2');
 }
+// =======================================================
+// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
+// =======================================================
 
-async function loadProfile() {
+let allBookingsCache = []; // Nơi lưu trữ tạm thời toàn bộ đơn hàng tải từ API về
+
+/**
+ * Hàm tự động chạy khi trang Host Bookings được tải
+ */
+/**
+ * CẬP NHẬT LẠI HÀM TẢI ĐƠN ĐẶT CHỖ PHÍA HOST
+ */
+async function loadHostBookings() {
+    const tableBody = document.getElementById('host-booking-table-body');
+    const emptyState = document.getElementById('booking-empty-state');
+    
+    const hostUser = JSON.parse(localStorage.getItem('workhub_user') || '{}');
+    const token = localStorage.getItem('token'); 
+
+    if (!hostUser.id || !token) {
+        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-5 text-center text-red-500 font-bold">Vui lòng đăng nhập tài khoản Host để xem dữ liệu!</td></tr>`;
+        return;
+    }
+
     try {
-        const token = localStorage.getItem('token');
-        const response = await fetch('/host/api/profile', {
+        const response = await fetch(`/api/hosts/${hostUser.id}/bookings`, {
             method: 'GET',
-            headers: { 'Authorization': `Bearer ${token}` }
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
         });
 
         const data = await response.json();
 
-        if (data.error) {
-            console.error("Lỗi từ server:", data.error);
-            return;
+        if (!response.ok) {
+            throw new Error(data.error || 'Không thể tải danh sách đơn hàng.');
         }
 
-        // ĐIỀN DỮ LIỆU
-        document.getElementById('host-name-input').value = data.user?.FullName || '';
-        document.getElementById('email').value = data.user?.Email || '';
+        allBookingsCache = data.bookings || [];
+        
+        // --- ĐOẠN ĐỒNG BỘ CON SỐ THỰC TẾ TRÊN TAB CHỜ DUYỆT ---
+        const pendingCount = allBookingsCache.filter(b => b.status === 'pending').length;
+        const pendingCountBadge = document.getElementById('host-pending-count');
+        if (pendingCountBadge) {
+            if (pendingCount > 0) {
+                pendingCountBadge.textContent = pendingCount;
+                pendingCountBadge.classList.remove('hidden'); // Hiện số lượng lên nếu có đơn chờ duyệt
+            } else {
+                pendingCountBadge.classList.add('hidden'); // Ẩn đi nếu không có đơn nào chờ duyệt
+            }
+        }
+        // -----------------------------------------------------
 
-        document.getElementById('companyName').value = data.profile?.CompanyName || '';
-        document.getElementById('hotline').value = data.profile?.Hotline || '';
-        document.getElementById('taxCode').value = data.profile?.TaxCode || '';
-        document.getElementById('bankName').value = data.profile?.BankName || '';
-        document.getElementById('bankNumber').value = data.profile?.BankNumber || '';
+        renderBookingsToTable(allBookingsCache);
 
     } catch (error) {
-        console.error("Lỗi khi tải profile:", error);
+        console.error('Lỗi tải đơn hàng:', error);
+        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-5 text-center text-red-400">Có lỗi xảy ra: ${error.message}</td></tr>`;
     }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
-    loadProfile();
-});
+/**
+ * HÀM KHỞI TẠO EVENT MỞ MODAL QUÉT MÃ QR KHÔNG BỊ LỖI TRÌNH DUYỆT
+ */
+function openModal(modalId) {
+    if (modalId === 'modal-qr') {
+        alert('📷 Tính năng Quét mã QR nhận diện đơn đặt chỗ đang được kích hoạt hệ thống Camera trên thiết bị...');
+        // Sau này bạn hoặc bạn nhóm có thể viết thêm logic gọi thư viện camera quét QR (như html5-qrcode) ở đây.
+    }
+}
 
-async function updateProfile() {
-    const token = localStorage.getItem('token');
+/**
+ * Hàm render dữ liệu mảng đơn hàng ra bảng HTML công nghệ Tailwind
+ */
+function renderBookingsToTable(bookingsList) {
+    const tableBody = document.getElementById('host-booking-table-body');
+    const emptyState = document.getElementById('booking-empty-state');
 
-    // Gói toàn bộ dữ liệu, CÓ BAO GỒM FULLNAME GỬI LÊN SERVER
-    const bodyData = {
-        FullName: document.getElementById('host-name-input').value, // Bắt tên ở đây nè!
-        CompanyName: document.getElementById('companyName').value,
-        Hotline: document.getElementById('hotline').value,
-        TaxCode: document.getElementById('taxCode').value,
-        BankName: document.getElementById('bankName').value,
-        BankNumber: document.getElementById('bankNumber').value
-    };
+    if (!tableBody) return;
 
-    const response = await fetch('/host/api/profile', {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(bodyData)
+    if (!bookingsList || bookingsList.length === 0) {
+        tableBody.innerHTML = '';
+        if (emptyState) emptyState.style.display = 'block'; // Hiện trạng thái trống
+        return;
+    }
+
+    if (emptyState) emptyState.style.display = 'none';
+
+    tableBody.innerHTML = bookingsList.map(booking => {
+        // Định dạng ngày hiển thị mượt mà
+        const startTime = new Date(booking.startTime).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'});
+        const endTime = new Date(booking.endTime).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'});
+        const dateStr = new Date(booking.startTime).toLocaleDateString('vi-VN');
+
+        // Định dạng màu sắc Badge trạng thái dựa theo enum trong Booking.js
+        let statusBadge = '';
+        if (booking.status === 'pending') {
+            statusBadge = `<span class="bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Chờ duyệt</span>`;
+        } else if (booking.status === 'confirmed') {
+            statusBadge = `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Đã xác nhận</span>`;
+        } else if (booking.status === 'completed') {
+            statusBadge = `<span class="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Hoàn thành</span>`;
+        } else if (booking.status === 'cancelled') {
+            statusBadge = `<span class="bg-rose-50 text-rose-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Đã hủy</span>`;
+        }
+
+        // Xử lý hiển thị nút hành động cho từng dòng
+        let actionButtons = '';
+        if (booking.status === 'pending') {
+            actionButtons = `
+                <button onclick="executeBookingAction('${booking._id}', 'confirm')" class="bg-teal-50 text-teal-700 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase hover:bg-teal-600 hover:text-white transition mr-1">Duyệt</button>
+                <button onclick="executeBookingAction('${booking._id}', 'cancel')" class="bg-rose-50 text-rose-700 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase hover:bg-rose-600 hover:text-white transition">Từ chối</button>
+            `;
+        } else {
+            actionButtons = `<span class="text-slate-400 font-medium italic">Không có</span>`;
+        }
+
+        return `
+            <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                <td class="p-5 font-bold text-slate-800">
+                    <div class="text-teal-600 font-black">#${booking._id.substring(booking._id.length - 6).toUpperCase()}</div>
+                    <div class="text-slate-500 text-[11px] font-medium mt-0.5">${booking.customerID?.email || 'Khách vãng lai'}</div>
+                </td>
+                <td class="p-5 font-bold text-slate-700">${booking.spaceID?.name || 'Không gian WorkHub'}</td>
+                <td class="p-5 text-slate-500 font-semibold">
+                    <div>${startTime} - ${endTime}</div>
+                    <div class="text-[10px] text-slate-400 mt-0.5">${dateStr}</div>
+                </td>
+                <td class="p-5">
+                    <div class="font-black text-slate-800">${booking.totalAmount.toLocaleString('vi-VN')}đ</div>
+                    <div class="text-[10px] font-black text-teal-600 mt-0.5">Đã trả: ${booking.percentagePaid}%</div>
+                </td>
+                <td class="p-5">${statusBadge}</td>
+                <td class="p-5 text-right">${actionButtons}</td>
+            </tr>
+        `;
+    }).join('');
+}
+
+/**
+ * Hàm Cốt Lõi: Xử lý sự kiện khi bấm nút phân loại (Tabs) lọc đơn đặt chỗ
+ */
+function filterHostBookings(status, tabElement) {
+    // 1. Loại bỏ class active (màu nổi bật) khỏi tất cả các tab bộ lọc
+    document.querySelectorAll('.booking-filter-tab').forEach(tab => {
+        tab.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+        tab.classList.add('text-slate-500', 'hover:bg-white');
     });
 
-    const data = await response.json();
-    alert(data.message || 'Đã cập nhật hồ sơ thành công!');
+    // 2. Kích hoạt hiệu ứng sáng nút (Active UI) cho tab vừa được click
+    if (tabElement) {
+        tabElement.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
+        tabElement.classList.remove('text-slate-500');
+    }
+
+    // 3. Tiến hành lọc mảng dữ liệu đã lưu trong bộ nhớ Cache dựa theo nút bấm
+    if (status === 'all') {
+        renderBookingsToTable(allBookingsCache);
+    } else if (status === 'in-use') {
+        // Trạng thái 'Đang dùng' tương đương với việc phòng đã được confirmed và thời gian hiện tại nằm giữa Start và End
+        const now = new Date();
+        const inUseList = allBookingsCache.filter(b => b.status === 'confirmed' && new Date(b.startTime) <= now && new Date(b.endTime) >= now);
+        renderBookingsToTable(inUseList);
+    } else if (status === 'completed') {
+        // Gom các đơn mang trạng thái 'completed' hoặc các đơn 'confirmed' nhưng đã quá giờ để đưa vào tab Lịch sử
+        const now = new Date();
+        const historyList = allBookingsCache.filter(b => b.status === 'completed' || (b.status === 'confirmed' && new Date(b.endTime) < now) || b.status === 'cancelled');
+        renderBookingsToTable(historyList);
+    } else {
+        // Các trạng thái cơ bản: pending, confirmed
+        const filteredList = allBookingsCache.filter(b => b.status === status);
+        renderBookingsToTable(filteredList);
+    }
 }
+
+/**
+ * Hàm điều hướng gọi API xử lý nút bấm Duyệt / Từ chối đơn đặt chỗ trực tiếp
+ */
+async function executeBookingAction(bookingId, action) {
+    if (!confirm(`Bạn có chắc chắn muốn thực hiện hành động này không?`)) return;
+
+    const hostUser = JSON.parse(localStorage.getItem('workhub_user') || '{}');
+    const token = localStorage.getItem('token');
+    const endpoint = action === 'confirm' ? 'confirm' : 'cancel';
+
+    try {
+        const response = await fetch(`/api/hosts/${hostUser.id}/bookings/${bookingId}/${endpoint}`, {
+            method: 'PUT',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Gặp lỗi khi cập nhật đơn.');
+
+        alert(data.message || 'Thao tác dữ liệu thành công!');
+        
+        // Tải lại toàn bộ dữ liệu đơn mới nhất từ database về để cập nhật bảng
+        loadHostBookings();
+
+    } catch (error) {
+        alert(error.message);
+    }
+}
+
+// Bổ sung luồng tự động nạp dữ liệu khi Host đang mở trang bookings
+window.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname === '/host/bookings') {
+        loadHostBookings();
+    }
+});
+
+// =======================================================
+// TỰ ĐỘNG KÍCH HOẠT KHI TẢI TRANG CHỦ LỰC (DÙNG CHO TRANG BOOKINGS)
+// =======================================================
+
+// Sử dụng sự kiện DOMContentLoaded để đảm bảo giao diện HTML đã load xong 
+// thì Javascript sẽ lập tức gọi API đổ dữ liệu vào bảng
+window.addEventListener('DOMContentLoaded', () => {
+    // Kiểm tra nếu trình duyệt đang mở đúng trang Đơn đặt chỗ của Host
+    if (window.location.pathname === '/host/bookings') {
+        loadHostBookings();
+    }
+});
+
+// =======================================================
+// LOGIC XỬ LÝ CHỨC NĂNG TÌM KIẾM ĐƠN ĐẶT CHỖ
+// =======================================================
+
+/**
+ * Hàm thực hiện lọc dữ liệu dựa trên từ khóa tìm kiếm
+ */
+function handleBookingSearch() {
+    const searchInput = document.getElementById('booking-search-input');
+    if (!searchInput) return;
+
+    // Lấy từ khóa, chuyển về chữ thường và xóa khoảng trắng thừa
+    const keyword = searchInput.value.trim().toLowerCase();
+
+    // Nếu ô tìm kiếm trống, hiển thị lại toàn bộ danh sách đơn hàng
+    if (keyword === '') {
+        renderBookingsToTable(allBookingsCache);
+        return;
+    }
+
+    // Tiến hành lọc mảng dữ liệu dựa trên mã đơn hoặc email khách hàng
+    const filteredResults = allBookingsCache.filter(booking => {
+        const bookingId = (booking._id || '').toLowerCase();
+        const customerEmail = (booking.customerID?.email || '').toLowerCase();
+        
+        // Kiểm tra xem từ khóa có xuất hiện trong mã đơn hoặc email không
+        return bookingId.includes(keyword) || customerEmail.includes(keyword);
+    });
+
+    // Đổ dữ liệu đã lọc ra bảng giao diện
+    renderBookingsToTable(filteredResults);
+}
+
+// Bổ sung sự kiện lắng nghe khi người dùng gõ chữ và nhấn phím Enter
+window.addEventListener('DOMContentLoaded', () => {
+    const searchInput = document.getElementById('booking-search-input');
+    
+    if (searchInput) {
+        searchInput.addEventListener('keydown', (event) => {
+            // Kiểm tra nếu phím vừa ấn là Enter
+            if (event.key === 'Enter') {
+                event.preventDefault(); // Chặn hành vi reload trang mặc định của form
+                handleBookingSearch(); // Kích hoạt hàm tìm kiếm
+            }
+        });
+    }
+});

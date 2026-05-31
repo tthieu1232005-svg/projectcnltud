@@ -32,12 +32,19 @@ app.use((req, res, next) => {
     next();
 });
 
+
+// ==========================================
+// KHAI BÁO CÁC API ROUTES (Xử lý dữ liệu ngầm)
+// ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/hosts', hostRoutes);
 app.use('/api/admin', adminRoutes);
 
-// View Engine: root project — Customer/, Host/, views/ (layout & partials dùng chung)
+
+// ==========================================
+// CẤU HÌNH VIEW ENGINE (Render Giao diện EJS)
+// ==========================================
 app.use(expressLayouts);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -92,6 +99,14 @@ app.get('/payment_history', async (req, res) => {
         res.status(500).send("Lỗi kết nối CSDL: " + error.message);
     }
 });
+// ==========================================
+// KHAI BÁO CÁC WEB ROUTES (Điều hướng trang)
+// ==========================================
+
+// --- Luồng Khách hàng (Customer) ---
+app.get('/', (req, res) => {
+    res.render('customer/home', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
 
 // --- CÁC ROUTES KHÁC CỦA NHÓM ---
 app.get('/', (req, res) => res.render('customer/home', { scripts: '<script src="/js/customer-main.js"></script>' }));
@@ -124,7 +139,7 @@ app.get('/profile', (req, res) => {
     res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
 
-// --- Luồng Dùng chung (đặt trong Customer) ---
+// --- Luồng Dùng chung (Đăng nhập / Đăng ký) ---
 app.get('/login', (req, res) => {
     res.render('customer/login');
 });
@@ -171,7 +186,14 @@ app.get('/admin/hosts', (req, res) => {
     res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
 
-// --- Middleware xử lý lỗi ---
+// ==========================================
+// MIDDLEWARE XỬ LÝ LỖI TỔNG
+// ==========================================
 app.use((err, req, res, next) => {
     res.status(500).json({ status: 'error', message: err.message });
-});
+    console.error('❌ Lỗi server:', err);
+    res.status(err.status || 500).json({
+        status: 'error',
+        message: err.message || 'Đã xảy ra lỗi server'
+    });
+    });
