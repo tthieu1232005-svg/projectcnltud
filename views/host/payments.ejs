@@ -1,0 +1,65 @@
+<div class="flex flex-col gap-6">
+  <h2 class="text-3xl font-black text-slate-800 uppercase tracking-tighter mb-4">
+    Lịch sử Giao dịch
+  </h2>
+
+  <div class="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden p-4">
+
+    <!-- FILTER (có thể làm sau) -->
+    <div class="flex gap-2 mb-6 bg-slate-50 p-1 rounded-2xl w-fit">
+      <button class="px-6 py-2 bg-white rounded-xl text-xs font-black uppercase shadow-sm text-teal-600">
+        Tất cả
+      </button>
+    </div>
+
+    <div class="overflow-x-auto">
+      <table class="w-full text-left border-collapse">
+
+        <thead class="bg-slate-50 border-b text-[10px] uppercase text-slate-400 font-black tracking-widest">
+          <tr>
+            <th class="p-5">Mã GD / Ngày</th>
+            <th class="p-5">Khách hàng</th>
+            <th class="p-5">Loại thanh toán</th>
+            <th class="p-5">Số tiền</th>
+            <th class="p-5">Cổng TT</th>
+          </tr>
+        </thead>
+<% const list = typeof payments !== "undefined" ? payments : []; %>
+
+<tbody class="text-xs">
+
+<% list.forEach(p => { %>
+  <tr class="border-b border-slate-50 hover:bg-slate-50 transition">
+
+    <td class="p-5">
+      <p class="font-black text-slate-800"><%= p.TransactionCode %></p>
+      <p class="text-slate-400 text-[10px]">
+        <%= p.createdAt ? new Date(p.createdAt).toLocaleString("vi-VN") : "" %>
+      </p>
+    </td>
+
+    <td class="p-5 font-bold text-slate-600">
+      <%= p.CustomerID?.name || "Không rõ" %>
+    </td>
+
+    <td class="p-5">
+      <%= p.PaymentType %>
+    </td>
+
+    <td class="p-5 font-black text-teal-600">
+      + <%= (p.Amount || 0).toLocaleString("vi-VN") %>đ
+    </td>
+
+    <td class="p-5 text-slate-400">
+      <%= p.PaymentMethod %>
+    </td>
+
+  </tr>
+<% }) %>
+
+</tbody>
+
+      </table>
+    </div>
+  </div>
+</div>
