@@ -29,64 +29,59 @@ function sendServerError(res, error) {
 // ================= LOGIC ĐĂNG KÝ  =================
 async function registerUser(req, res) {
     try {
-        const { email, password, fullName, role, companyName, hotline, bankName, bankNumber } = req.body;
+        const { email, password, fullName, role, companyName, taxCode, phone, bankName, bankNumber } = req.body;
 
-        // 1. Validate Dữ liệu cơ bản
-        if (!email || !password || !fullName) {
-            return res.status(400).json({ error: 'Vui lòng nhập đầy đủ Email, Mật khẩu và Họ tên!' });
+        // 1. KIỂM TRA ĐẦU VÀO CƠ BẢN TRƯỚC (Chưa đụng tới Database)
+        if (!email || !password || !fullName || !phone || !bankName || !bankNumber) {
+            return res.status(400).json({ error: 'Vui lòng nhập đầy đủ thông tin bắt buộc!' });
         }
-        if (!isValidEmail(email)) {
-            return res.status(400).json({ error: 'Định dạng email không hợp lệ!' });
-        }
-        if (!isValidPassword(password)) {
-            return res.status(400).json({ error: 'Mật khẩu phải >= 6 ký tự, bao gồm cả chữ và số!' });
-        }
+        if (!isValidEmail(email)) return res.status(400).json({ error: 'Định dạng email không hợp lệ!' });
+        if (!isValidPassword(password)) return res.status(400).json({ error: 'Mật khẩu phải >= 6 ký tự, bao gồm cả chữ và số!' });
 
         const normalizedEmail = normalizeEmail(email);
         const normalizedRole = String(role || '').trim().toLowerCase();
-        const normalizedFullName = String(fullName).trim();
 
         if (!['customer', 'host'].includes(normalizedRole)) {
-            return res.status(400).json({ error: 'Role phải là customer hoặc host.' });
+            return res.status(400).json({ error: 'Role không hợp lệ.' });
         }
 
-        // 2. Kiểm tra Email tồn tại
+        // 2. KIỂM TRA ĐẦU VÀO RIÊNG CỦA HOST (Quan trọng: Đưa lên trước khi lưu User)
+        if (normalizedRole === 'host') {
+            if (!companyName || !taxCode) {
+                return res.status(400).json({ error: 'Host bắt buộc nhập Tên công ty và Mã số thuế!' });
+            }
+            if (!req.file) { // Trạm gác multer báo không có file
+                return res.status(400).json({ error: 'Vui lòng tải lên Giấy phép kinh doanh!' });
+            }
+        }
+
+        // 3. KIỂM TRA EMAIL TRÙNG LẶP TRONG DB
         const existingUser = await User.findOne({ Email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ error: 'Email này đã được đăng ký!' });
         }
 
-        // 3. Hash Mật khẩu
+        // 4. BẮT ĐẦU VÀO VÙNG LƯU DỮ LIỆU (Khi mọi thứ đã an toàn 100%)
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(String(password), salt);
 
-        // 4. Tạo User mới
         const user = await User.create({
             Email: normalizedEmail,
             PasswordHash: passwordHash,
-            FullName: normalizedFullName,
+            FullName: String(fullName).trim(),
             Role: normalizedRole,
             Status: 'active'
         });
 
-        // 5. Tạo Profile theo Role
+        // 5. TẠO PROFILE (Với biến taxCode viết chuẩn xác)
         if (normalizedRole === 'host') {
-            // BẬT LẠI TÍNH NĂNG KIỂM TRA BẮT BUỘC
-            if (!companyName || !hotline || !bankName || !bankNumber) {
-                await User.findByIdAndDelete(user._id);
-                return res.status(400).json({ 
-                    error: 'Đăng ký Host yêu cầu bổ sung: Tên công ty, Hotline, Tên ngân hàng, Số tài khoản!' 
-                });
-            }
-
-            // LƯU DỮ LIỆU THẬT MÀ NGƯỜI DÙNG NHẬP VÀO
             await HostProfile.create({
                 UserID: user._id,
                 CompanyName: String(companyName).trim(),
+                TaxCode: String(taxCode).trim(), // Đã sửa lỗi biến tại đây
+                VerificationDocument: req.file.path, // Lấy link ảnh từ multer/cloudinary
                 Logo: "",
-                Hotline: String(hotline).trim(),
-                TaxCode: "",
-                VerificationDocument: "",
+                Hotline: String(phone).trim(),
                 IsVerified: false,
                 BankName: String(bankName).trim(),
                 BankNumber: String(bankNumber).trim()
@@ -94,27 +89,14 @@ async function registerUser(req, res) {
         } else {
             await CustomerProfile.create({
                 UserID: user._id,
-                Avatar: "",
-                Phone: "",
-                Description: "",
-                JobTitle: "",
-                Company: "",
-                BankName: "",
-                BankNumber: ""
+                Phone: String(phone).trim(),
+                BankName: String(bankName).trim(),
+                BankNumber: String(bankNumber).trim(),
+                Avatar: "", Description: "", JobTitle: "", Company: ""
             });
         }
 
-        // 6. Trả về kết quả
-        return res.status(201).json({
-            message: 'Đăng ký thành công.',
-            user: {
-                id: user._id,
-                email: user.Email,
-                fullName: user.FullName,
-                role: user.Role,
-                status: user.Status
-            }
-        });
+        return res.status(201).json({ message: 'Đăng ký thành công.', user: { id: user._id } });
 
     } catch (error) {
         return sendServerError(res, error);
@@ -166,6 +148,14 @@ async function loginUser(req, res) {
             { expiresIn: '1d' }
         );
 
+        // Gửi cookie tự động để browser có thể dùng cho các route render server-side
+        res.cookie('authToken', token, {
+            path: '/',
+            maxAge: 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax'
+        });
+
         // 5. Trả về kết quả cho Frontend
         return res.status(200).json({
             message: 'Đăng nhập thành công.',
@@ -184,6 +174,7 @@ async function loginUser(req, res) {
 }
 // ================= LOGIC ĐĂNG XUẤT =================
 function logoutUser(req, res) {
+    res.clearCookie('authToken');
     return res.json({ message: 'Đăng xuất thành công.' });
 }
 

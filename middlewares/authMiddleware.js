@@ -1,12 +1,23 @@
 const jwt = require('jsonwebtoken');
 
+function parseCookies(cookieHeader = '') {
+    return cookieHeader.split(';').reduce((cookies, cookieString) => {
+        const [name, ...rest] = cookieString.trim().split('=');
+        if (!name) return cookies;
+        cookies[name] = decodeURIComponent(rest.join('='));
+        return cookies;
+    }, {});
+}
+
 // Hàm kiểm tra xem người dùng đã đăng nhập chưa (Có Token hợp lệ không)
 function verifyToken(req, res, next) {
-    // Thông thường token sẽ được gửi qua header Authorization: Bearer <token>
-    // Hoặc trong dự án EJS, có thể bạn sẽ gửi qua Cookie. 
-    // Giả sử ở đây chúng ta lấy từ Header
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+    const tokenFromHeader = authHeader && authHeader.split(' ')[1];
+
+    const cookies = parseCookies(req.headers.cookie || '');
+    const tokenFromCookie = cookies.authToken || cookies.token;
+
+    const token = tokenFromHeader || tokenFromCookie;
 
     if (!token) {
         return res.status(401).json({ error: 'Không tìm thấy token xác thực. Vui lòng đăng nhập.' });

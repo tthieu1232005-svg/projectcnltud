@@ -45,60 +45,58 @@ async function updateCustomerProfile(req, res) {
   }
 }
 
-// 3. LẤY LỊCH SỬ THANH TOÁN (ĐÃ TỐI ƯU HÓA)
+// 3. LẤY LỊCH SỬ THANH TOÁN
 async function getCustomerBookings(req, res) {
   try {
-    const mockUserId = "65ecef123456789012345678"; 
+    // Lấy userId từ token (sau khi verifyToken)
+    const userId = req.user?.userId || req.params.userId;
+    
+    if (!userId) {
+      return res.status(401).send("Vui lòng đăng nhập");
+    }
+
     const { branchKeyword, startDate, statusFilter } = req.query;
 
-    // Lấy toàn bộ danh sách chi nhánh để hiển thị trong ô tìm kiếm
     const allSpaces = await Space.find({}).select('name').lean();
 
-    let query = { CustomerID: new mongoose.Types.ObjectId(mockUserId) };
+    let query = { CustomerID: new mongoose.Types.ObjectId(userId) };
 
-    // Xử lý bộ lọc Trạng thái
+    // Xử lý trạng thái
     if (statusFilter && statusFilter !== 'Tất cả') {
-      if (statusFilter === 'Thành công') query.Status = 'confirmed';
+      if (statusFilter === 'Thành công') query.Status = { $in: ['confirmed', 'completed'] };
       if (statusFilter === 'Thất bại') query.Status = 'cancelled';
     } else {
       query.Status = { $in: ['confirmed', 'cancelled', 'completed'] };
     }
 
-    // Xử lý bộ lọc Thời gian
     if (startDate) {
       const startOfDay = new Date(startDate);
       startOfDay.setHours(0, 0, 0, 0);
       query.createdAt = { $gte: startOfDay };
     }
 
-    // Truy vấn Booking và populate Space
     let bookings = await Booking.find(query)
       .populate({ path: 'SpaceID', select: 'name' })
-      .sort({ createdAt: -1 }) 
+      .sort({ createdAt: -1 })
       .lean();
 
-    // Lọc theo chi nhánh (nếu có)
     if (branchKeyword) {
       bookings = bookings.filter(item => 
-        item.SpaceID && item.SpaceID.name === branchKeyword
+        item.SpaceID && item.SpaceID.name.toLowerCase().includes(branchKeyword.toLowerCase())
       );
     }
 
-    return res.render('customer/payment_history', { 
+    res.render('customer/payment_history', { 
       bookings: bookings || [], 
-      allSpaces: allSpaces, // Truyền danh sách chi nhánh sang EJS
-      filters: { 
-        branchKeyword: branchKeyword || '', 
-        startDate: startDate || '', 
-        statusFilter: statusFilter || 'Tất cả' 
-      },
-      userId: mockUserId,
+      allSpaces, 
+      filters: { branchKeyword: branchKeyword || '', startDate: startDate || '', statusFilter: statusFilter || 'Tất cả' },
+      userId: userId,
       scripts: '<script src="/js/customer-main.js"></script>' 
     });
 
   } catch (error) {
-    console.error("🔴 Lỗi Hệ Thống Backend:", error);
-    return res.status(500).send("Đã xảy ra lỗi khi kết nối database.");
+    console.error("Lỗi getCustomerBookings:", error);
+    res.status(500).send("Lỗi server");
   }
 }
 
