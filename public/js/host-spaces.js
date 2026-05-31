@@ -1,24 +1,3 @@
-// QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
-
-const DEFAULT_FACILITIES = {
-    central: {
-        id: 'central',
-        name: 'WorkHub Central Q1',
-        address: '123 Lê Lợi, Phường Bến Thành, Quận 1',
-        note: 'Chi nhánh trung tâm nhất của hệ thống.',
-        image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800'
-    }
-};
-
-const DEFAULT_FACILITY_SPACES = {
-    central: [
-        { id: '101', type: 'Phòng họp', status: 'occupied', price: '250.000đ', image: '' },
-        { id: '102', type: 'Phòng họp', status: 'ready', price: '250.000đ', image: '' },
-        { id: 'A-01', type: 'Chỗ ngồi tự do', status: 'preparing', price: '35.000đ', image: '' },
-        { id: 'A-02', type: 'Chỗ ngồi tự do', status: 'suspended', price: '35.000đ', image: '' }
-    ]
-};
-
 let hostFacilities = {};
 let facilitySpacesData = {};
 let addFacilityDraft = { imageDataUrl: '', spaces: [] };
@@ -312,7 +291,6 @@ function initHostSpacesPage() {
     renderFacilityList();
 }
 
-// Ghi đè / bổ sung hàm từ main.js khi host-spaces.js được load sau main.js
 function openFacilityMgmt(facId) {
     showHostSpaceLayer('space-mgr-layer-2');
     const f = hostFacilities[facId];
@@ -344,4 +322,64 @@ function backToLayer1() {
 
 function backToLayer2() {
     showHostSpaceLayer('space-mgr-layer-2');
+}
+
+async function loadProfile() {
+    try {
+        const token = localStorage.getItem('token');
+        const response = await fetch('/host/api/profile', {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            console.error("Lỗi từ server:", data.error);
+            return;
+        }
+
+        // ĐIỀN DỮ LIỆU
+        document.getElementById('host-name-input').value = data.user?.FullName || '';
+        document.getElementById('email').value = data.user?.Email || '';
+
+        document.getElementById('companyName').value = data.profile?.CompanyName || '';
+        document.getElementById('hotline').value = data.profile?.Hotline || '';
+        document.getElementById('taxCode').value = data.profile?.TaxCode || '';
+        document.getElementById('bankName').value = data.profile?.BankName || '';
+        document.getElementById('bankNumber').value = data.profile?.BankNumber || '';
+
+    } catch (error) {
+        console.error("Lỗi khi tải profile:", error);
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    loadProfile();
+});
+
+async function updateProfile() {
+    const token = localStorage.getItem('token');
+
+    // Gói toàn bộ dữ liệu, CÓ BAO GỒM FULLNAME GỬI LÊN SERVER
+    const bodyData = {
+        FullName: document.getElementById('host-name-input').value, // Bắt tên ở đây nè!
+        CompanyName: document.getElementById('companyName').value,
+        Hotline: document.getElementById('hotline').value,
+        TaxCode: document.getElementById('taxCode').value,
+        BankName: document.getElementById('bankName').value,
+        BankNumber: document.getElementById('bankNumber').value
+    };
+
+    const response = await fetch('/host/api/profile', {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(bodyData)
+    });
+
+    const data = await response.json();
+    alert(data.message || 'Đã cập nhật hồ sơ thành công!');
 }

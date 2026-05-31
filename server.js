@@ -26,6 +26,11 @@ app.use(express.static(path.join(__dirname, 'public')));
 // --- Middleware xử lý dữ liệu ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+// Cấp quyền cho toàn bộ file EJS được phép truy cập vào biến 'req'
+app.use((req, res, next) => {
+    res.locals.req = req;
+    next();
+});
 
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
@@ -129,13 +134,15 @@ app.get('/register', (req, res) => {
 });
 
 // --- Luồng Chủ cơ sở (Host) ---
-app.get('/host/profile', (req, res) => {
-    res.render('host/profile', { scripts: '<script src="/js/host-spaces.js"></script>' });
-});
+// app.get('/host/profile', (req, res) => {
+//     res.render('host/profile', { scripts: '<script src="/js/host-spaces.js"></script>' });
+// });
 
-app.get('/host/dashboard', (req, res) => {
-    res.render('host/dashboard', { scripts: '<script src="/js/host-spaces.js"></script>' });
-});
+app.use('/host', hostRoutes);
+
+// app.get('/host/dashboard', (req, res) => {
+//     res.render('host/dashboard', { scripts: '<script src="/js/host-spaces.js"></script>' });
+// });
 
 app.get('/host/spaces', (req, res) => {
     res.render('host/spaces', { scripts: '<script src="/js/host-spaces.js"></script>' });

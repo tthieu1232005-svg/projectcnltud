@@ -193,6 +193,112 @@ function logout() {
     window.location.href = '/login';
 }
 
+// ==========================================
+// XỬ LÝ SỰ KIỆN ĐỔI MẬT KHẨU (GỬI API LÊN BACKEND)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Tìm nút "THAY ĐỔI MẬT KHẨU" bằng cách bắt text hoặc đặt thêm id cho nút đó
+    // Ở đây mình sẽ tìm nút dựa trên nội dung chữ "THAY ĐỔI MẬT KHẨU"
+    const changePasswordBtn = Array.from(document.querySelectorAll('button, a, div'))
+        .find(el => el.textContent.trim() === 'THAY ĐỔI MẬT KHẨU');
+
+    if (changePasswordBtn) {
+        // Thay đổi con trỏ chuột cho người dùng biết nút bấm được
+        changePasswordBtn.classList.add('cursor-pointer');
+
+        changePasswordBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            // 2. Trỏ tới các ô nhập (Tìm dựa theo nội dung placeholder/chữ hiển thị trong ô)
+            // Lời khuyên: Bạn nên đặt thuộc tính id="oldPassword", id="newPassword", id="confirmPassword" cho các thẻ <input> này trong file EJS/HTML để lấy dữ liệu chuẩn xác nhất.
+            const inputs = document.querySelectorAll('input[type="password"]');
+
+            // Giả định thứ tự 3 ô nhập từ trái qua phải như trên giao diện của bạn
+            const oldPasswordInput = inputs[0];
+            const newPasswordInput = inputs[1];
+            const confirmPasswordInput = inputs[2];
+
+            if (!oldPasswordInput || !newPasswordInput || !confirmPasswordInput) {
+                alert('Không tìm thấy các ô nhập mật khẩu trên giao diện!');
+                return;
+            }
+
+            const oldPassword = oldPasswordInput.value.trim();
+            const newPassword = newPasswordInput.value.trim();
+            const confirmPassword = confirmPasswordInput.value.trim();
+
+            // 3. Validate dữ liệu nhanh ở Frontend trước khi gửi đi
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                alert('Vui lòng điền đầy đủ cả 3 ô mật khẩu!');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                alert('Mật khẩu mới và Xác nhận mật khẩu mới không trùng khớp với nhau!');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('Mật khẩu mới phải có độ dài từ 6 ký tự trở lên!');
+                return;
+            }
+
+            try {
+                // Đổi trạng thái nút bấm để tránh người dùng click liên tục
+                changePasswordBtn.innerText = 'ĐANG XỬ LÝ...';
+                changePasswordBtn.style.pointerEvents = 'none';
+
+                // 4. Lấy token từ localStorage (Giấy thông hành để Backend nhận diện ai đang đổi)
+                const token = localStorage.getItem('token');
+
+                // 5. Gửi request Fetch đến đúng API Backend
+                const response = await fetch('/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` // Truyền Token vào Header để authMiddleware kiểm tra
+                    },
+                    body: JSON.stringify({
+                        oldPassword: oldPassword,
+                        newPassword: newPassword
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    // THÀNH CÔNG THẬT SỰ (DB ĐÃ ĐỔI)
+                    if (typeof showToast === 'function') {
+                        showToast('Cập nhật mật khẩu thành công!');
+                    } else {
+                        alert('Cập nhật mật khẩu thành công!');
+                    }
+
+                    // Xóa sạch dữ liệu cũ trong các ô nhập sau khi đổi thành công
+                    oldPasswordInput.value = '';
+                    newPasswordInput.value = '';
+                    confirmPasswordInput.value = '';
+
+                    // Tùy chọn: Bạn có thể gọi hàm logout() ở đây để bắt người dùng đăng nhập lại bằng mật khẩu mới
+                    // setTimeout(() => logout(), 1500);
+
+                } else {
+                    // THẤT BẠI: Hiển thị lỗi do Backend trả về (Ví dụ: Mật khẩu cũ không chính xác)
+                    alert(result.error || 'Đổi mật khẩu thất bại, vui lòng thử lại!');
+                }
+
+            } catch (error) {
+                console.error('Lỗi khi gọi API đổi mật khẩu:', error);
+                alert('Có lỗi kết nối hệ thống, vui lòng thử lại sau!');
+            } finally {
+                // Trả lại trạng thái ban đầu cho nút bấm
+                changePasswordBtn.innerText = 'THAY ĐỔI MẬT KHẨU';
+                changePasswordBtn.style.pointerEvents = 'auto';
+            }
+        });
+    }
+});
+
 document.addEventListener('click', (event) => {
     const userInfo = document.getElementById('user-info');
     const dropdown = document.getElementById('dropdown-menu');

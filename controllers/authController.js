@@ -169,8 +169,60 @@ function logoutUser(req, res) {
     return res.json({ message: 'Đăng xuất thành công.' });
 }
 
+// ================= LOGIC ĐỔI MẬT KHẨU =================
+async function changePassword(req, res) {
+    try {
+        const { oldPassword, newPassword } = req.body;
+
+        // 1. Kiểm tra userId từ verifyToken truyền sang
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ error: 'Phiên làm việc hết hạn, vui lòng đăng nhập lại!' });
+        }
+
+        // 2. Validate dữ liệu đầu vào
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({ error: 'Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới!' });
+        }
+
+        // 3. Tìm User trong Database
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'Tài khoản không tồn tại trên hệ thống!' });
+        }
+
+        // 4. Kiểm tra mật khẩu cũ
+        const isMatch = await bcrypt.compare(String(oldPassword), user.PasswordHash);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Mật khẩu cũ không chính xác!' });
+        }
+
+        // 5. Tiến hành mã hóa mật khẩu mới
+        const salt = await bcrypt.genSalt(10);
+        const newPasswordHash = await bcrypt.hash(String(newPassword), salt);
+
+        // 6. CẬP NHẬT TRỰC TIẾP XUỐNG MONGOOSE TRÁNH BỊ HOOK BYPASS
+        const updateResult = await User.updateOne(
+            { _id: userId },
+            { $set: { PasswordHash: newPasswordHash } }
+        );
+
+        console.log("-> Kết quả cập nhật mật khẩu DB:", updateResult);
+
+        if (updateResult.modifiedCount === 0) {
+            return res.status(500).json({ error: 'Mật khẩu mới trùng mật khẩu cũ hoặc lỗi hệ thống không thể ghi đè!' });
+        }
+
+        return res.status(200).json({ message: 'Cập nhật mật khẩu thành công!' });
+
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+}
+
 module.exports = {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    changePassword
 };

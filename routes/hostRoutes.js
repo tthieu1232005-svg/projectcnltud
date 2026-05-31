@@ -1,12 +1,19 @@
 const express = require('express');
-const { getHostProfile, updateHostProfile, getHostBranches, getHostSpaces, getHostBookings } = require('../controllers/hostController');
-
 const router = express.Router();
+const hostController = require('../controllers/hostController');
+const { protect } = require('../middlewares/authMiddleware');
 
-router.get('/:hostId/profile', getHostProfile);
-router.put('/:hostId/profile', updateHostProfile);
-router.get('/:hostId/branches', getHostBranches);
-router.get('/:hostId/spaces', getHostSpaces);
-router.get('/:hostId/bookings', getHostBookings);
+router.get('/dashboard', hostController.renderDashboardView);
+router.get('/api/dashboard-stats', hostController.getDashboardStatsAPI);
+
+router.get('/profile', (req, res) => {
+    res.render('host/profile', {
+        success: false,  
+        scripts: '<script src="/js/host-spaces.js"></script>'
+    });
+});
+
+router.get('/api/profile', hostController.getProfileAPI);
+router.put('/api/profile', hostController.updateProfileAPI);
 
 module.exports = router;
