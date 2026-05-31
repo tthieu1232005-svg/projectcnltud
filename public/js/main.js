@@ -12,7 +12,7 @@ const menus = {
     'host': [
         { id: 'host_dashboard', label: 'Dashboard', icon: '📊' }, 
         { id: 'host_spaces', label: 'Quản lý không gian', icon: '🏢' }, 
-        { id: 'host_bookings', label: 'Đơn đặt chỗ', icon: '📋' }, 
+        { id: 'host_bookings', label: 'Quản lý đơn', icon: '📋' }, 
         { id: 'host_reports', label: 'Báo cáo', icon: '💰' }, 
         { id: 'host_payments', label: 'Lịch sử tiền', icon: '💳' }, 
         { id: 'host_profile', label: 'Hồ sơ', icon: '👤' }

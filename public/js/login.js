@@ -29,9 +29,9 @@ async function handleLogin(event) {
             // LƯU TOKEN VÀ THÔNG TIN VÀO LOCALSTORAGE
             localStorage.setItem('token', data.token); // Cất giấy thông hành
             localStorage.setItem('userRole', data.user.role); // Nhớ vai trò để render UI sau này
-
+            localStorage.setItem('user', JSON.stringify(data.user));
             localStorage.setItem('userName', data.user.fullName); // Lưu tên để hiển thị trên UI
-            
+            localStorage.setItem('userId', data.user.id);
             // ĐIỀU HƯỚNG DỰA TRÊN VAI TRÒ (ROLE-BASED ROUTING)
             setTimeout(() => {
                 if (data.user.role === 'host') {

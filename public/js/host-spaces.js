@@ -1,4 +1,6 @@
+// =======================================================
 // QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
+// =======================================================
 
 const DEFAULT_FACILITIES = {
     central: {
@@ -312,7 +314,6 @@ function initHostSpacesPage() {
     renderFacilityList();
 }
 
-// Ghi đè / bổ sung hàm từ main.js khi host-spaces.js được load sau main.js
 function openFacilityMgmt(facId) {
     showHostSpaceLayer('space-mgr-layer-2');
     const f = hostFacilities[facId];
@@ -345,32 +346,33 @@ function backToLayer1() {
 function backToLayer2() {
     showHostSpaceLayer('space-mgr-layer-2');
 }
+
+
 // =======================================================
 // LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
 // =======================================================
 
-let allBookingsCache = []; // Nơi lưu trữ tạm thời toàn bộ đơn hàng tải từ API về
+// =======================================================
+// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
+// =======================================================
 
-/**
- * Hàm tự động chạy khi trang Host Bookings được tải
- */
-/**
- * CẬP NHẬT LẠI HÀM TẢI ĐƠN ĐẶT CHỖ PHÍA HOST
- */
+let allBookingsCache = []; 
+
 async function loadHostBookings() {
     const tableBody = document.getElementById('host-booking-table-body');
     const emptyState = document.getElementById('booking-empty-state');
     
-    const hostUser = JSON.parse(localStorage.getItem('workhub_user') || '{}');
     const token = localStorage.getItem('token'); 
+    const hostId = localStorage.getItem('userId');
 
-    if (!hostUser.id || !token) {
-        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-5 text-center text-red-500 font-bold">Vui lòng đăng nhập tài khoản Host để xem dữ liệu!</td></tr>`;
+    if (!hostId || !token) {
+        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-bold bg-red-50 rounded-xl">Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại!</td></tr>`;
+        if (emptyState) emptyState.style.display = 'none';
         return;
     }
 
     try {
-        const response = await fetch(`/api/hosts/${hostUser.id}/bookings`, {
+        const response = await fetch(`/api/hosts/${hostId}/bookings`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -383,43 +385,152 @@ async function loadHostBookings() {
         if (!response.ok) {
             throw new Error(data.error || 'Không thể tải danh sách đơn hàng.');
         }
-
+    
         allBookingsCache = data.bookings || [];
         
-        // --- ĐOẠN ĐỒNG BỘ CON SỐ THỰC TẾ TRÊN TAB CHỜ DUYỆT ---
-        const pendingCount = allBookingsCache.filter(b => b.status === 'pending').length;
+        if (allBookingsCache.length === 0) {
+            if (tableBody) tableBody.innerHTML = ''; 
+            if (emptyState) emptyState.style.display = 'block'; 
+            
+            const pendingCountBadge = document.getElementById('host-pending-count');
+            if (pendingCountBadge) pendingCountBadge.classList.add('hidden'); 
+            return;
+        }
+
+        if (emptyState) emptyState.style.display = 'none';
+
+        const pendingCount = allBookingsCache.filter(b => (b.Status || b.status) === 'pending').length;
         const pendingCountBadge = document.getElementById('host-pending-count');
         if (pendingCountBadge) {
             if (pendingCount > 0) {
                 pendingCountBadge.textContent = pendingCount;
-                pendingCountBadge.classList.remove('hidden'); // Hiện số lượng lên nếu có đơn chờ duyệt
+                pendingCountBadge.classList.remove('hidden'); 
             } else {
-                pendingCountBadge.classList.add('hidden'); // Ẩn đi nếu không có đơn nào chờ duyệt
+                pendingCountBadge.classList.add('hidden'); 
             }
         }
-        // -----------------------------------------------------
 
-        renderBookingsToTable(allBookingsCache);
+        // Gọi hàm lọc tổng hợp (mặc định ban đầu sẽ tự load Tất cả)
+        applyCombinedFilters();
 
     } catch (error) {
-        console.error('Lỗi tải đơn hàng:', error);
-        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-5 text-center text-red-400">Có lỗi xảy ra: ${error.message}</td></tr>`;
+        console.error('Lỗi tải đơn hàng Host:', error);
+        if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-rose-500 font-bold bg-rose-50">Lỗi kết nối máy chủ: ${error.message}</td></tr>`;
+        if (emptyState) emptyState.style.display = 'none';
     }
 }
 
-/**
- * HÀM KHỞI TẠO EVENT MỞ MODAL QUÉT MÃ QR KHÔNG BỊ LỖI TRÌNH DUYỆT
- */
-function openModal(modalId) {
-    if (modalId === 'modal-qr') {
-        alert('📷 Tính năng Quét mã QR nhận diện đơn đặt chỗ đang được kích hoạt hệ thống Camera trên thiết bị...');
-        // Sau này bạn hoặc bạn nhóm có thể viết thêm logic gọi thư viện camera quét QR (như html5-qrcode) ở đây.
-    }
+// =======================================================
+// TRẠNG THÁI BỘ LỌC TOÀN CỤC (GLOBAL FILTER STATE)
+// =======================================================
+let currentStatusFilter = 'all'; 
+let currentTimeFilter = { type: 'all', start: null, end: null };
+let currentKeywordFilter = ''; // Biến lưu trữ từ khóa tìm kiếm
+
+// =======================================================
+// HÀM LỌC VÀ SẮP XẾP KẾT HỢP (TÌM KIẾM + TRẠNG THÁI + THỜI GIAN)
+// =======================================================
+function applyCombinedFilters() {
+    const now = new Date();
+    
+    // 1. BƯỚC LỌC DỮ LIỆU (FILTERING)
+    let filteredList = allBookingsCache.filter(booking => {
+        const originalStatus = booking.Status || booking.status;
+        const end = new Date(booking.EndTime || booking.endTime);
+        const isExpired = !isNaN(end.getTime()) && (now >= end);
+        
+        // Tự động ép trạng thái Đã kết thúc nếu lố giờ (ảo trên UI)
+        let displayStatus = originalStatus;
+        if (originalStatus === 'in-use' && isExpired) displayStatus = 'completed';
+
+        // --- Điều kiện A: Khớp Trạng thái ---
+        let passStatus = false;
+        if (currentStatusFilter === 'all') passStatus = true;
+        else if (currentStatusFilter === 'in-use') passStatus = (displayStatus === 'in-use');
+        else if (currentStatusFilter === 'completed') passStatus = (displayStatus === 'completed' || originalStatus === 'cancelled');
+        else passStatus = (displayStatus === currentStatusFilter);
+
+        // --- Điều kiện B: Khớp Thời gian (Ngày cụ thể) ---
+        let passTime = true;
+        if (currentTimeFilter.type === 'specific') {
+            const bookingStart = new Date(booking.StartTime || booking.startTime);
+            passTime = (bookingStart >= currentTimeFilter.start && bookingStart <= currentTimeFilter.end);
+        }
+
+        // --- Điều kiện C: Khớp Từ khóa tìm kiếm ---
+        let passKeyword = true;
+        if (currentKeywordFilter !== '') {
+            const bookingId = (booking._id || '').toLowerCase();
+            const customer = booking.CustomerID || booking.customerID || {};
+            const customerEmail = (customer.email || customer.Email || '').toLowerCase();
+            
+            passKeyword = bookingId.includes(currentKeywordFilter) || customerEmail.includes(currentKeywordFilter);
+        }
+
+        return passStatus && passTime && passKeyword;
+    });
+
+    // 2. BƯỚC SẮP XẾP DỮ LIỆU (SORTING LÊN ĐẦU)
+    filteredList.sort((a, b) => {
+        const nowTime = now.getTime();
+
+        // Hàm chấm điểm ưu tiên (Điểm càng thấp càng ưu tiên nằm trên cùng)
+        const getPriorityScore = (bk) => {
+            const status = bk.Status || bk.status;
+            const endObj = new Date(bk.EndTime || bk.endTime);
+            const isExpired = !isNaN(endObj.getTime()) && (nowTime >= endObj.getTime());
+            
+            let dStatus = status;
+            if (status === 'in-use' && isExpired) dStatus = 'completed';
+
+            // Ưu tiên 1: Đang dùng và Sắp hết giờ (<= 15p)
+            if (dStatus === 'in-use') {
+                const minsLeft = Math.floor((endObj.getTime() - nowTime) / (1000 * 60));
+                if (minsLeft <= 14 && minsLeft >= 0) return 1; 
+                return 3; // Đang dùng bình thường (Ưu tiên 3)
+            }
+            // Ưu tiên 2: Chờ duyệt (Cần xử lý gấp)
+            if (dStatus === 'pending') return 2; 
+            
+            // Ưu tiên 4: Đã xác nhận (Chờ khách đến)
+            if (dStatus === 'confirmed') return 4;
+            
+            // Ưu tiên 5: Đã kết thúc / Đã hủy (Cho xuống đáy bảng)
+            return 5; 
+        };
+
+        const scoreA = getPriorityScore(a);
+        const scoreB = getPriorityScore(b);
+
+        // Nếu điểm ưu tiên khác nhau, xếp theo điểm (1,2,3,4,5)
+        if (scoreA !== scoreB) {
+            return scoreA - scoreB;
+        }
+
+        // Nếu cùng điểm ưu tiên, xếp đơn có thời gian kết thúc gần nhất lên trước
+        const endA = new Date(a.EndTime || a.endTime).getTime();
+        const endB = new Date(b.EndTime || b.endTime).getTime();
+        return endA - endB;
+    });
+
+    // 3. VẼ BẢNG
+    renderBookingsToTable(filteredList);
 }
 
-/**
- * Hàm render dữ liệu mảng đơn hàng ra bảng HTML công nghệ Tailwind
- */
+// =======================================================
+// XỬ LÝ THANH TÌM KIẾM
+// =======================================================
+function handleBookingSearch() {
+    const searchInput = document.getElementById('booking-search-input');
+    if (!searchInput) return;
+
+    // Cập nhật từ khóa và gọi hàm lọc tổng hợp
+    currentKeywordFilter = searchInput.value.trim().toLowerCase();
+    applyCombinedFilters();
+}
+
+let liveTimerInterval = null; 
+
 function renderBookingsToTable(bookingsList) {
     const tableBody = document.getElementById('host-booking-table-body');
     const emptyState = document.getElementById('booking-empty-state');
@@ -428,111 +539,232 @@ function renderBookingsToTable(bookingsList) {
 
     if (!bookingsList || bookingsList.length === 0) {
         tableBody.innerHTML = '';
-        if (emptyState) emptyState.style.display = 'block'; // Hiện trạng thái trống
+        if (emptyState) emptyState.style.display = 'block';
         return;
     }
 
     if (emptyState) emptyState.style.display = 'none';
+    const currentTime = new Date();
 
     tableBody.innerHTML = bookingsList.map(booking => {
-        // Định dạng ngày hiển thị mượt mà
-        const startTime = new Date(booking.startTime).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'});
-        const endTime = new Date(booking.endTime).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'});
-        const dateStr = new Date(booking.startTime).toLocaleDateString('vi-VN');
+        const start = booking.StartTime || booking.startTime;
+        const end = booking.EndTime || booking.endTime;
+        const status = booking.Status || booking.status;
+        
+        const endTimeObj = new Date(end);
+        const isDateValid = !isNaN(endTimeObj.getTime());
+        const timeDiff = endTimeObj.getTime() - currentTime.getTime();
+        const minutesLeft = Math.floor(timeDiff / (1000 * 60)); 
+        
+        let displayStatus = status;
+        let timeWarningUI = ''; 
 
-        // Định dạng màu sắc Badge trạng thái dựa theo enum trong Booking.js
+        // LOGIC XỬ LÝ KHUNG ĐẾM NGƯỢC
+        if (status === 'in-use' && isDateValid) {
+            if (minutesLeft < 0) {
+                // Tự động chuyển thành "Đã kết thúc" khi hết giờ
+                displayStatus = 'completed';
+            } else {
+                const isHidden = minutesLeft > 14 ? 'hidden' : 'flex animate-pulse';
+                
+                timeWarningUI = `
+                    <div class="live-countdown-container mt-2 ${isHidden} items-center gap-1 bg-amber-100 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-black uppercase border border-amber-200 shadow-sm w-max whitespace-nowrap justify-center"
+                         data-endtime="${end}">
+                        ⏰ <span class="timer-text font-mono">...</span>
+                    </div>
+                `;
+            }
+        }
+
+        const total = booking.TotalAmount || booking.totalAmount || 0;
+        const deposit = booking.DepositAmount || booking.depositAmount || 0;
+        
+        let percent = booking.percentagePaid !== undefined ? booking.percentagePaid : (total > 0 ? Math.round((deposit / total) * 100) : 0);
+        let actualPaid = deposit > 0 ? deposit : (total * percent / 100);
+        let remaining = total - actualPaid;
+
+        if (displayStatus === 'in-use' || displayStatus === 'completed') {
+            percent = 100;
+            actualPaid = total;
+            remaining = 0; 
+        }
+
+        const customer = booking.CustomerID || booking.customerID || {};
+        const space = booking.SpaceID || booking.spaceID || {};
+        // File: host-spaces.js
+        //const space = (booking.SpaceID && typeof booking.SpaceID === 'object') ? booking.SpaceID : {};
+
+        const startTimeStr = start ? new Date(start).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        const endTimeStr = end ? new Date(end).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : '--:--';
+        const dateStr = start ? new Date(start).toLocaleDateString('vi-VN') : 'Dữ liệu thời gian lỗi';
+
         let statusBadge = '';
-        if (booking.status === 'pending') {
+        if (displayStatus === 'pending') {
             statusBadge = `<span class="bg-amber-50 text-amber-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Chờ duyệt</span>`;
-        } else if (booking.status === 'confirmed') {
-            statusBadge = `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Đã xác nhận</span>`;
-        } else if (booking.status === 'completed') {
-            statusBadge = `<span class="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Hoàn thành</span>`;
-        } else if (booking.status === 'cancelled') {
+        } else if (displayStatus === 'confirmed') {
+            statusBadge = `<span class="bg-blue-50 text-blue-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px] whitespace-nowrap">Đã xác nhận</span>`;
+        } else if (displayStatus === 'in-use') {
+            statusBadge = `<span class="bg-purple-50 text-purple-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Đang dùng</span>`;
+        } else if (displayStatus === 'completed') {
+            statusBadge = `<span class="bg-emerald-50 text-emerald-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Đã kết thúc</span>`;
+        } else if (displayStatus === 'cancelled') {
             statusBadge = `<span class="bg-rose-50 text-rose-700 px-3 py-1 rounded-full font-black uppercase tracking-wider text-[10px]">Đã hủy</span>`;
         }
 
-        // Xử lý hiển thị nút hành động cho từng dòng
         let actionButtons = '';
-        if (booking.status === 'pending') {
+        if (displayStatus === 'pending') {
             actionButtons = `
                 <button onclick="executeBookingAction('${booking._id}', 'confirm')" class="bg-teal-50 text-teal-700 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase hover:bg-teal-600 hover:text-white transition mr-1">Duyệt</button>
                 <button onclick="executeBookingAction('${booking._id}', 'cancel')" class="bg-rose-50 text-rose-700 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase hover:bg-rose-600 hover:text-white transition">Từ chối</button>
             `;
+        } else if (displayStatus === 'confirmed') {
+            actionButtons = `
+                <button onclick="executeBookingAction('${booking._id}', 'checkin')" class="bg-blue-50 text-blue-700 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase hover:bg-blue-600 hover:text-white transition shadow-sm mr-1">Nhận phòng</button>
+                <button onclick="executeBookingAction('${booking._id}', 'cancel')" class="bg-rose-50 text-rose-700 font-black px-3 py-1.5 rounded-xl text-[10px] uppercase hover:bg-rose-600 hover:text-white transition shadow-sm" title="Hủy do khách đến trễ/vắng mặt">Hủy (Khách trễ)</button>
+            `;
         } else {
-            actionButtons = `<span class="text-slate-400 font-medium italic">Không có</span>`;
+            actionButtons = `<span class="text-slate-300 font-black text-lg">-</span>`;
         }
+
+        let paymentUI = '';
+        if (total === 0) {
+            paymentUI = `
+                <div class="font-black text-rose-500 text-[11px] italic">⚠️ Lỗi dữ liệu</div>
+                <div class="text-[9px] font-bold text-slate-400 mt-0.5">DB trống giá (0đ)</div>
+            `;
+        } else {
+            paymentUI = `
+                <div class="font-black text-slate-800">${total.toLocaleString('vi-VN')}đ</div>
+                <div class="text-[10px] font-bold text-slate-500 mt-0.5">Đã trả: ${actualPaid.toLocaleString('vi-VN')}đ (${percent}%)</div>
+            `;
+            
+            if (displayStatus === 'cancelled') {
+                paymentUI += `<div class="text-[10px] font-black text-slate-500 mt-1 bg-slate-100 inline-block px-2 py-0.5 rounded border border-slate-200">Không thu thêm</div>`;
+            } else if (displayStatus === 'pending' || displayStatus === 'confirmed') {
+                if (remaining > 0) {
+                    paymentUI += `<div class="text-[10px] font-black text-rose-600 mt-1 bg-rose-50 inline-block px-2 py-0.5 rounded border border-rose-100">Cần thu: ${remaining.toLocaleString('vi-VN')}đ</div>`;
+                } else {
+                    paymentUI += `<div class="text-[10px] font-black text-emerald-600 mt-1 bg-emerald-50 inline-block px-2 py-0.5 rounded border border-emerald-100">Đã thu đủ</div>`;
+                }
+            } else {
+                paymentUI += `<div class="text-[10px] font-black text-emerald-600 mt-1 bg-emerald-50 inline-block px-2 py-0.5 rounded border border-emerald-100">Đã thu đủ</div>`;
+            }
+        }
+
+        const displayEmail = customer.email || customer.Email || '<span class="text-rose-500">Lỗi dữ liệu khách</span>';
+
+        function getSpaceDisplayName(sp) {
+            if (!sp || typeof sp !== 'object') return 'Chưa cập nhật tên Không gian';
+            return (
+                sp.name ||
+                sp.Name ||
+                sp.spaceName ||
+                sp.SpaceName ||
+                'Chưa cập nhật tên Không gian'
+            );
+        }
+
+        function getSpaceDisplayCode(sp) {
+            if (!sp || typeof sp !== 'object') return '---';
+            return (
+                sp.SpaceCode ||
+                sp.spaceCode ||
+                sp.Space_Code ||
+                sp.space_code ||
+                sp.code ||
+                sp.Space_code ||
+                '---'
+            );
+        }
+
+
+        const displaySpaceName = getSpaceDisplayName(space);
+        const displaySpaceCode = getSpaceDisplayCode(space);
+
+
+
+        
 
         return `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
                 <td class="p-5 font-bold text-slate-800">
-                    <div class="text-teal-600 font-black">#${booking._id.substring(booking._id.length - 6).toUpperCase()}</div>
-                    <div class="text-slate-500 text-[11px] font-medium mt-0.5">${booking.customerID?.email || 'Khách vãng lai'}</div>
+                    <div class="text-teal-600 font-black">#${booking._id ? booking._id.substring(booking._id.length - 6).toUpperCase() : 'N/A'}</div>
+                    <div class="text-slate-500 text-[11px] font-medium mt-0.5">${displayEmail}</div>
                 </td>
-                <td class="p-5 font-bold text-slate-700">${booking.spaceID?.name || 'Không gian WorkHub'}</td>
+                
+                <td class="p-5 font-bold text-slate-700">
+                    <div class="text-sm text-slate-800">${displaySpaceName}</div>
+                    <div class="text-[10px] text-teal-500 font-green uppercase mt-1">Mã: ${displaySpaceCode}</div>
+                    
+                </td>
+                
                 <td class="p-5 text-slate-500 font-semibold">
-                    <div>${startTime} - ${endTime}</div>
+                    <div>${startTimeStr} - ${endTimeStr}</div>
                     <div class="text-[10px] text-slate-400 mt-0.5">${dateStr}</div>
+                    ${timeWarningUI}
                 </td>
+                
                 <td class="p-5">
-                    <div class="font-black text-slate-800">${booking.totalAmount.toLocaleString('vi-VN')}đ</div>
-                    <div class="text-[10px] font-black text-teal-600 mt-0.5">Đã trả: ${booking.percentagePaid}%</div>
+                    ${paymentUI}
                 </td>
                 <td class="p-5">${statusBadge}</td>
                 <td class="p-5 text-right">${actionButtons}</td>
-            </tr>
+                </tr>
+
         `;
     }).join('');
+
+    startLiveTimers();
 }
 
-/**
- * Hàm Cốt Lõi: Xử lý sự kiện khi bấm nút phân loại (Tabs) lọc đơn đặt chỗ
- */
-function filterHostBookings(status, tabElement) {
-    // 1. Loại bỏ class active (màu nổi bật) khỏi tất cả các tab bộ lọc
-    document.querySelectorAll('.booking-filter-tab').forEach(tab => {
-        tab.classList.remove('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-        tab.classList.add('text-slate-500', 'hover:bg-white');
-    });
+function startLiveTimers() {
+    if (liveTimerInterval) clearInterval(liveTimerInterval);
 
-    // 2. Kích hoạt hiệu ứng sáng nút (Active UI) cho tab vừa được click
-    if (tabElement) {
-        tabElement.classList.add('active', 'bg-white', 'shadow-sm', 'text-slate-800');
-        tabElement.classList.remove('text-slate-500');
-    }
+    liveTimerInterval = setInterval(() => {
+        const containers = document.querySelectorAll('.live-countdown-container');
+        let needToRefreshTable = false; 
 
-    // 3. Tiến hành lọc mảng dữ liệu đã lưu trong bộ nhớ Cache dựa theo nút bấm
-    if (status === 'all') {
-        renderBookingsToTable(allBookingsCache);
-    } else if (status === 'in-use') {
-        // Trạng thái 'Đang dùng' tương đương với việc phòng đã được confirmed và thời gian hiện tại nằm giữa Start và End
-        const now = new Date();
-        const inUseList = allBookingsCache.filter(b => b.status === 'confirmed' && new Date(b.startTime) <= now && new Date(b.endTime) >= now);
-        renderBookingsToTable(inUseList);
-    } else if (status === 'completed') {
-        // Gom các đơn mang trạng thái 'completed' hoặc các đơn 'confirmed' nhưng đã quá giờ để đưa vào tab Lịch sử
-        const now = new Date();
-        const historyList = allBookingsCache.filter(b => b.status === 'completed' || (b.status === 'confirmed' && new Date(b.endTime) < now) || b.status === 'cancelled');
-        renderBookingsToTable(historyList);
-    } else {
-        // Các trạng thái cơ bản: pending, confirmed
-        const filteredList = allBookingsCache.filter(b => b.status === status);
-        renderBookingsToTable(filteredList);
-    }
+        containers.forEach(container => {
+            const endStr = container.getAttribute('data-endtime');
+            const endTime = new Date(endStr).getTime();
+            const now = new Date().getTime();
+            const diff = endTime - now;
+
+            if (diff <= 0) {
+                // Chạm mốc 0 giây -> Kích hoạt load lại bảng để xếp nó xuống đáy
+                needToRefreshTable = true;
+            } else {
+                const totalSeconds = Math.floor(diff / 1000);
+                const mins = Math.floor(totalSeconds / 60);
+                const secs = totalSeconds % 60;
+                
+                const secsFormatted = secs < 10 ? '0' + secs : secs;
+                container.querySelector('.timer-text').textContent = `Hết giờ: ${mins}p ${secsFormatted}s`;
+
+                // Nếu đếm lùi đến <= 15 phút, xóa class ẩn để hiện lên
+                if (mins <= 14) {
+                    container.classList.remove('hidden');
+                    container.classList.add('flex', 'animate-pulse');
+                }
+            }
+        });
+
+        // Khi có đơn hết giờ, applyCombinedFilters() sẽ tự động chấm điểm lại.
+        // Đơn đó từ "Ưu tiên 1" sẽ bị rớt xuống "Ưu tiên 5" và chuyển sang Đã kết thúc.
+        if (needToRefreshTable) {
+            applyCombinedFilters(); 
+        }
+    }, 1000); 
 }
 
-/**
- * Hàm điều hướng gọi API xử lý nút bấm Duyệt / Từ chối đơn đặt chỗ trực tiếp
- */
 async function executeBookingAction(bookingId, action) {
-    if (!confirm(`Bạn có chắc chắn muốn thực hiện hành động này không?`)) return;
+    if (action !== 'checkin' && !confirm(`Bạn có chắc chắn muốn thực hiện hành động này không?`)) return;
 
-    const hostUser = JSON.parse(localStorage.getItem('workhub_user') || '{}');
+    const hostId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
-    const endpoint = action === 'confirm' ? 'confirm' : 'cancel';
 
     try {
-        const response = await fetch(`/api/hosts/${hostUser.id}/bookings/${bookingId}/${endpoint}`, {
+        const response = await fetch(`/api/hosts/${hostId}/bookings/${bookingId}/${action}`, {
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -543,9 +775,8 @@ async function executeBookingAction(bookingId, action) {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Gặp lỗi khi cập nhật đơn.');
 
-        alert(data.message || 'Thao tác dữ liệu thành công!');
+        if (action !== 'checkin') alert(data.message || 'Thao tác dữ liệu thành công!');
         
-        // Tải lại toàn bộ dữ liệu đơn mới nhất từ database về để cập nhật bảng
         loadHostBookings();
 
     } catch (error) {
@@ -553,69 +784,82 @@ async function executeBookingAction(bookingId, action) {
     }
 }
 
-// Bổ sung luồng tự động nạp dữ liệu khi Host đang mở trang bookings
-window.addEventListener('DOMContentLoaded', () => {
-    if (window.location.pathname === '/host/bookings') {
-        loadHostBookings();
-    }
-});
-
 // =======================================================
-// TỰ ĐỘNG KÍCH HOẠT KHI TẢI TRANG CHỦ LỰC (DÙNG CHO TRANG BOOKINGS)
+// XỬ LÝ KHI CLICK VÀO TAB TRẠNG THÁI (BÊN TRÁI)
 // =======================================================
-
-// Sử dụng sự kiện DOMContentLoaded để đảm bảo giao diện HTML đã load xong 
-// thì Javascript sẽ lập tức gọi API đổ dữ liệu vào bảng
-window.addEventListener('DOMContentLoaded', () => {
-    // Kiểm tra nếu trình duyệt đang mở đúng trang Đơn đặt chỗ của Host
-    if (window.location.pathname === '/host/bookings') {
-        loadHostBookings();
-    }
-});
-
-// =======================================================
-// LOGIC XỬ LÝ CHỨC NĂNG TÌM KIẾM ĐƠN ĐẶT CHỖ
-// =======================================================
-
-/**
- * Hàm thực hiện lọc dữ liệu dựa trên từ khóa tìm kiếm
- */
-function handleBookingSearch() {
-    const searchInput = document.getElementById('booking-search-input');
-    if (!searchInput) return;
-
-    // Lấy từ khóa, chuyển về chữ thường và xóa khoảng trắng thừa
-    const keyword = searchInput.value.trim().toLowerCase();
-
-    // Nếu ô tìm kiếm trống, hiển thị lại toàn bộ danh sách đơn hàng
-    if (keyword === '') {
-        renderBookingsToTable(allBookingsCache);
-        return;
-    }
-
-    // Tiến hành lọc mảng dữ liệu dựa trên mã đơn hoặc email khách hàng
-    const filteredResults = allBookingsCache.filter(booking => {
-        const bookingId = (booking._id || '').toLowerCase();
-        const customerEmail = (booking.customerID?.email || '').toLowerCase();
-        
-        // Kiểm tra xem từ khóa có xuất hiện trong mã đơn hoặc email không
-        return bookingId.includes(keyword) || customerEmail.includes(keyword);
+function filterHostBookings(status, tabElement) {
+    document.querySelectorAll('.booking-filter-tab').forEach(tab => {
+        tab.classList.remove('active', 'bg-white', 'shadow-sm', 'text-teal-600', 'border-teal-500');
+        tab.classList.add('text-slate-500', 'hover:bg-white', 'border-transparent');
     });
 
-    // Đổ dữ liệu đã lọc ra bảng giao diện
-    renderBookingsToTable(filteredResults);
+    if (tabElement) {
+        tabElement.classList.add('active', 'bg-white', 'shadow-sm', 'text-teal-600', 'border-teal-500');
+        tabElement.classList.remove('text-slate-500', 'hover:bg-white', 'border-transparent');
+    }
+
+    currentStatusFilter = status;
+    applyCombinedFilters();
 }
 
-// Bổ sung sự kiện lắng nghe khi người dùng gõ chữ và nhấn phím Enter
+// =======================================================
+// XỬ LÝ KHI CLICK VÀO PHỄU THỜI GIAN (BÊN PHẢI)
+// =======================================================
+function triggerDatePicker() {
+    const dateInput = document.getElementById('funnel-date-picker');
+    if (dateInput) {
+        try { dateInput.showPicker(); } 
+        catch (error) { dateInput.focus(); }
+    }
+}
+
+function applyFunnelFilter(filterType) {
+    const displayLabel = document.getElementById('filter-display-text');
+    const datePicker = document.getElementById('funnel-date-picker');
+
+    if (filterType === 'all') {
+        datePicker.value = ''; 
+        if (displayLabel) {
+            displayLabel.textContent = 'Tất cả thời gian';
+            displayLabel.classList.remove('text-teal-600'); 
+        }
+        currentTimeFilter = { type: 'all', start: null, end: null };
+        
+    } else if (filterType === 'specific') {
+        const selectedDateVal = datePicker.value; 
+        if (!selectedDateVal) return; 
+
+        const targetDate = new Date(selectedDateVal);
+        const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 0, 0, 0);
+        const endOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate(), 23, 59, 59, 999);
+
+        if (displayLabel) {
+            displayLabel.textContent = `Lọc: ${startOfDay.toLocaleDateString('vi-VN')}`;
+            displayLabel.classList.add('text-teal-600'); 
+        }
+
+        currentTimeFilter = { type: 'specific', start: startOfDay, end: endOfDay };
+    }
+
+    applyCombinedFilters();
+}
+
+// =======================================================
+// TỰ ĐỘNG KÍCH HOẠT KHI TẢI TRANG
+// =======================================================
 window.addEventListener('DOMContentLoaded', () => {
+    if (window.location.pathname === '/host/bookings') {
+        loadHostBookings();
+    }
+
     const searchInput = document.getElementById('booking-search-input');
-    
     if (searchInput) {
+        // Cập nhật: Có thể lọc trực tiếp khi gõ chữ (input) hoặc khi bấm Enter
+        searchInput.addEventListener('input', handleBookingSearch);
         searchInput.addEventListener('keydown', (event) => {
-            // Kiểm tra nếu phím vừa ấn là Enter
             if (event.key === 'Enter') {
-                event.preventDefault(); // Chặn hành vi reload trang mặc định của form
-                handleBookingSearch(); // Kích hoạt hàm tìm kiếm
+                event.preventDefault(); 
+                handleBookingSearch();  
             }
         });
     }

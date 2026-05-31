@@ -1,3 +1,4 @@
+const MONGODB_URI = 'mongodb://127.0.0.1:27017/coworking_db';
 const express = require('express');
 const expressLayouts = require('express-ejs-layouts');
 const path = require('path');
@@ -33,6 +34,8 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+//ấp quyền cho phép trình duyệt đọc các file tĩnh (như css, js, hình ảnh)
+app.use(express.static('public'));
 
 // ==========================================
 // KHAI BÁO CÁC API ROUTES (Xử lý dữ liệu ngầm)

@@ -7,7 +7,8 @@ const {
   getCustomerBookings,
   createBooking,
   cancelBooking,
-  payRemainder
+  payRemainder,
+  submitReview
 } = require('../controllers/customerController');
 
 // Import Middleware bảo mật
@@ -36,6 +37,8 @@ router.get('/:userId/bookings', getCustomerBookings);
 // ==========================================
 // Khách hàng tạo đơn đặt chỗ mới (Sử dụng phương thức POST vì đây là hành động Tạo mới dữ liệu)
 router.post('/:userId/bookings', createBooking);
+
+router.post('/:userId/bookings/:bookingId/review', submitReview);
 
 // Khách hàng tự hủy đơn (khi đơn vẫn đang chờ xác nhận)
 router.put('/:userId/bookings/:bookingId/cancel', cancelBooking);

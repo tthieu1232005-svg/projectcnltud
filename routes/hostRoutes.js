@@ -8,7 +8,8 @@ const {
   getHostSpaces, 
   getHostBookings,
   confirmBooking, 
-  cancelBooking 
+  cancelBooking,
+  checkinBooking
 } = require('../controllers/hostController');
 
 // Import Middleware bảo mật
@@ -34,6 +35,7 @@ router.get('/:hostId/spaces', getHostSpaces);
 router.get('/:hostId/bookings', getHostBookings);
 
 
+
 // ==========================================
 // CÁC API HÀNH ĐỘNG (THAO TÁC VỚI ĐƠN HÀNG)
 // ==========================================
@@ -42,5 +44,8 @@ router.put('/:hostId/bookings/:bookingId/confirm', confirmBooking);
 
 // Host từ chối đơn (Chuyển sang cancelled)
 router.put('/:hostId/bookings/:bookingId/cancel', cancelBooking);
+
+// Host check-in đơn (Chuyển sang in-use)
+router.put('/:hostId/bookings/:bookingId/checkin', checkinBooking);
 
 module.exports = router;
