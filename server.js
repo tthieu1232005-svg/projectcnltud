@@ -7,7 +7,7 @@ const { connectDB } = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const hostRoutes = require('./routes/hostRoutes');
-const adminRoutes = require('./routes/adminroutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -110,7 +110,16 @@ app.get('/host/payments', (req, res) => {
     res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
-// --- Admin: (chưa triển khai) ---
+// --- Luồng Admin ---
+app.get('/admin/dashboard', (req, res) => {
+    res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
+app.get('/admin/users', (req, res) => {
+    res.render('admin/users', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
+app.get('/admin/hosts', (req, res) => {
+    res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
 
 // --- Middleware xử lý lỗi ---
 app.use((err, req, res, next) => {
