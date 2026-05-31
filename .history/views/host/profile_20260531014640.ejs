@@ -1,0 +1,38 @@
+<!-- Khu vực hiển thị thông báo (Toasts/Alerts) -->
+<div class="mb-6">
+    <!-- SỬA Ở ĐÂY: Chỉ giữ lại biến success được truyền từ Controller -->
+    <% if (typeof success !=='undefined' && success) { %>
+        <div
+            class="p-4 bg-white border-l-4 border-emerald-500 text-emerald-700 rounded-r-xl shadow-sm flex items-center gap-3 animate-fade-in-up">
+            <div class="bg-emerald-100 p-2 rounded-full">
+                <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                </svg>
+            </div>
+            <div>
+                <h4 class="font-bold text-sm">Thao tác thành công!</h4>
+                <p class="text-xs text-emerald-600 opacity-80">Hồ sơ của bạn đã được cập nhật vào lúc <%= new
+                        Date().toLocaleString('vi-VN') %>
+                </p>
+            </div>
+        </div>
+        <% } %>
+
+            <% if (typeof errorMsg !=='undefined' && errorMsg) { %>
+                <div
+                    class="p-4 bg-white border-l-4 border-rose-500 text-rose-700 rounded-r-xl shadow-sm flex items-center gap-3">
+                    <div class="bg-rose-100 p-2 rounded-full">
+                        <svg class="w-5 h-5 text-rose-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                        </svg>
+                    </div>
+                    <div>
+                        <h4 class="font-bold text-sm">Đã xảy ra lỗi</h4>
+                        <p class="text-xs text-rose-600 opacity-80">
+                            <%= errorMsg %>
+                        </p>
+                    </div>
+                </div>
+                <% } %>
+</div>
