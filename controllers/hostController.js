@@ -4,7 +4,6 @@ const Space = require('../models/Space');
 const Booking = require('../models/Booking');
 const PaymentHistory = require('../models/Payment_History');
 
-
 function sendServerError(res, error) {
   console.error(error);
   return res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại sau.' });
@@ -85,10 +84,6 @@ async function getHostSpaces(req, res) {
 async function getHostBookings(req, res) {
   try {
     const { hostId } = req.params;
-    // CODE BẠN TÌM THẤY TRONG FILE SẼ TRÔNG NHƯ THẾ NÀY:
-// async function getHostBookings(req, res) {
-//   try {
-//     const { hostId } = req.params;
       
        // 1. CHÈN ĐOẠN MÁY HÚT BỤI NÀY VÀO ĐÂY: TỰ ĐỘNG CHỐT ĐƠN HẾT GIỜ
        const currentTime = new Date();
@@ -102,7 +97,6 @@ async function getHostBookings(req, res) {
          },
          { strict: false }
        );
-
    
     if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
@@ -122,7 +116,17 @@ async function getHostBookings(req, res) {
       .lean();
 
       
+    // DEBUG TEMP: kiểm tra SpaceID có populate đúng SpaceCode hay không
+    if (Array.isArray(bookings) && bookings.length > 0) {
+      console.log('[DEBUG] hostBookings sample SpaceID:', {
+        space: bookings[0].SpaceID,
+        spaceCode: bookings[0]?.SpaceID?.SpaceCode,
+        name: bookings[0]?.SpaceID?.Name
+      });
+    }
+
     return res.json({ bookings });
+
   } catch (error) {
     return sendServerError(res, error);
   }
@@ -166,16 +170,28 @@ async function confirmBooking(req, res) {
     // Bọc try-catch riêng cho PaymentHistory để không làm sập tiến trình duyệt đơn
     try {
       await PaymentHistory.create({
-        bookingID: booking._id,
-        amount: amountReceived,
-        paymentType: paymentType,
-        paymentMethod: 'bank_transfer',
-        status: 'successful'
+        BookingID: booking._id,
+        CustomerID: booking.CustomerID || booking.customerID,
+        HostID: booking.HostID || booking.hostID,
+        TransactionCode: `TXN-CONFIRM-${Math.floor(Math.random() * 100000)}`, // Tạo mã giao dịch ngẫu nhiên
+        Amount: amountReceived,
+        PaymentType: paymentType,
+        PaymentMethod: 'bank_transfer',
+        Status: 'successful'
       });
+      console.log('✅ Đã ghi nhận lịch sử thanh toán thành công!');
     } catch (paymentErr) {
-      console.log('Lưu ý: Không thể ghi nhận lịch sử thanh toán:', paymentErr.message);
+      console.log('⚠️ Lưu ý: Không thể ghi nhận lịch sử thanh toán:', paymentErr.message);
     }
-
+    
+    if (global.io) {
+        // Phát tín hiệu mang tên 'booking_status_updated' kèm data
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'confirmed'
+        });
+    }
+    
     return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
 
   } catch (error) {
@@ -215,7 +231,15 @@ async function checkinBooking(req, res) {
       },
       { strict: false } 
     );
-
+    
+    if (global.io) {
+        // Sửa newStatus thành in-use
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'in-use' 
+        });
+    }
+    
     return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận thu đủ 100% tiền!' });
   } catch (error) {
     // In lỗi chi tiết ra Terminal màu đen
@@ -245,7 +269,15 @@ async function cancelBooking(req, res) {
       { _id: bookingId },
       { $set: { Status: 'cancelled', status: 'cancelled' } }
     );
-
+    
+    if (global.io) {
+        // Sửa newStatus thành cancelled
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'cancelled'
+        });
+    }
+    
     return res.status(200).json({ message: 'Đã hủy đơn hàng thành công.' });
   } catch (error) {
     return sendServerError(res, error);

@@ -28,11 +28,12 @@ router.use(verifyToken, authorizeRole('host'));
 // ==========================================
 // CÁC API LẤY & CẬP NHẬT THÔNG TIN
 // ==========================================
+router.get('/:hostId/bookings', getHostBookings);
 router.get('/:hostId/profile', getHostProfile);
 router.put('/:hostId/profile', updateHostProfile);
 router.get('/:hostId/branches', getHostBranches);
 router.get('/:hostId/spaces', getHostSpaces);
-router.get('/:hostId/bookings', getHostBookings);
+
 
 
 

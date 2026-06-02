@@ -562,11 +562,9 @@ function renderBookingsToTable(bookingsList) {
         // LOGIC XỬ LÝ KHUNG ĐẾM NGƯỢC
         if (status === 'in-use' && isDateValid) {
             if (minutesLeft < 0) {
-                // Tự động chuyển thành "Đã kết thúc" khi hết giờ
                 displayStatus = 'completed';
             } else {
                 const isHidden = minutesLeft > 14 ? 'hidden' : 'flex animate-pulse';
-                
                 timeWarningUI = `
                     <div class="live-countdown-container mt-2 ${isHidden} items-center gap-1 bg-amber-100 text-amber-600 px-3 py-1.5 rounded-xl text-xs font-black uppercase border border-amber-200 shadow-sm w-max whitespace-nowrap justify-center"
                          data-endtime="${end}">
@@ -591,8 +589,6 @@ function renderBookingsToTable(bookingsList) {
 
         const customer = booking.CustomerID || booking.customerID || {};
         const space = booking.SpaceID || booking.spaceID || {};
-        // File: host-spaces.js
-        //const space = (booking.SpaceID && typeof booking.SpaceID === 'object') ? booking.SpaceID : {};
 
         const startTimeStr = start ? new Date(start).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : '--:--';
         const endTimeStr = end ? new Date(end).toLocaleString('vi-VN', {hour: '2-digit', minute:'2-digit'}) : '--:--';
@@ -677,13 +673,8 @@ function renderBookingsToTable(bookingsList) {
             );
         }
 
-
         const displaySpaceName = getSpaceDisplayName(space);
         const displaySpaceCode = getSpaceDisplayCode(space);
-
-
-
-        
 
         return `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
@@ -693,9 +684,8 @@ function renderBookingsToTable(bookingsList) {
                 </td>
                 
                 <td class="p-5 font-bold text-slate-700">
-                    <div class="text-sm text-slate-800">${displaySpaceName}</div>
-                    <div class="text-[10px] text-teal-500 font-green uppercase mt-1">Mã: ${displaySpaceCode}</div>
-                    
+                    <div class="text-sm text-slate-800 mb-1">${displaySpaceName}</div>
+                    <div class="text-xs font-bold text-slate-500 mb-3">Mã phòng: ${displaySpaceCode}</div>
                 </td>
                 
                 <td class="p-5 text-slate-500 font-semibold">
@@ -709,12 +699,14 @@ function renderBookingsToTable(bookingsList) {
                 </td>
                 <td class="p-5">${statusBadge}</td>
                 <td class="p-5 text-right">${actionButtons}</td>
-                </tr>
-
+            </tr>
         `;
     }).join('');
 
-    startLiveTimers();
+    // Gọi lại hàm đếm ngược thời gian nếu có
+    if (typeof startLiveTimers === 'function') {
+        startLiveTimers();
+    }
 }
 
 function startLiveTimers() {
@@ -864,3 +856,20 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================
+// ĐỒNG BỘ THỜI GIAN THỰC (SOCKET.IO)
+// ==========================================
+if (typeof io !== 'undefined') {
+    const socket = io();
+
+    // Lắng nghe sự kiện từ Backend
+    socket.on('booking_status_updated', (data) => {
+        console.log('Đơn hàng cập nhật (Host):', data);
+        
+        // Gọi lại hàm load dữ liệu để làm mới bảng quản lý
+        if (typeof loadHostBookings === 'function') {
+            loadHostBookings();
+        }
+    });
+}

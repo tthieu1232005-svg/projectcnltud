@@ -464,3 +464,20 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================
+// ĐỒNG BỘ THỜI GIAN THỰC (SOCKET.IO)
+// ==========================================
+if (typeof io !== 'undefined') {
+    const socket = io();
+
+    // Lắng nghe sự kiện từ Backend
+    socket.on('booking_status_updated', (data) => {
+        console.log('Đơn hàng cập nhật (Customer):', data);
+        
+        // GỌI ĐÚNG HÀM TẢI DỮ LIỆU CỦA FILE NÀY
+        if (typeof fetchCustomerHistory === 'function') {
+            fetchCustomerHistory();
+        }
+    });
+}
