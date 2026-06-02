@@ -2,7 +2,7 @@ const HostProfile = require('../models/Host_Profile');
 const Branch = require('../models/Branch');
 const Space = require('../models/Space');
 const Booking = require('../models/Booking');
-const PaymentHistory = require('../models/Payment_History'); // Bổ sung Model Payment_History
+const PaymentHistory = require('../models/Payment_History');
 
 function sendServerError(res, error) {
   console.error(error);
@@ -12,15 +12,13 @@ function sendServerError(res, error) {
 async function getHostProfile(req, res) {
   try {
     const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
-    const profile = await HostProfile.findOne({ userID: hostId }).lean();
-    if (!profile) {
-      return res.status(404).json({ error: 'Hồ sơ chủ cơ sở không tìm thấy.' });
-    }
-
+    const profile = await HostProfile.findOne({
+      $or: [{ UserID: hostId }, { userID: hostId }]
+    }).lean();
+    
+    if (!profile) return res.status(404).json({ error: 'Hồ sơ chủ cơ sở không tìm thấy.' });
     return res.json({ profile });
   } catch (error) {
     return sendServerError(res, error);
@@ -30,13 +28,11 @@ async function getHostProfile(req, res) {
 async function updateHostProfile(req, res) {
   try {
     const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
     const update = req.body;
     const profile = await HostProfile.findOneAndUpdate(
-      { userID: hostId },
+      { $or: [{ UserID: hostId }, { userID: hostId }] },
       { $set: update },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
@@ -50,11 +46,12 @@ async function updateHostProfile(req, res) {
 async function getHostBranches(req, res) {
   try {
     const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
-    const branches = await Branch.find({ hostID: hostId }).lean();
+    const branches = await Branch.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    }).lean();
+    
     return res.json({ branches });
   } catch (error) {
     return sendServerError(res, error);
@@ -64,13 +61,16 @@ async function getHostBranches(req, res) {
 async function getHostSpaces(req, res) {
   try {
     const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
-    const branches = await Branch.find({ hostID: hostId }).select('_id').lean();
+    const branches = await Branch.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    }).select('_id').lean();
+    
     const branchIds = branches.map(branch => branch._id);
-    const spaces = await Space.find({ branchID: { $in: branchIds } }).lean();
+    const spaces = await Space.find({
+      $or: [{ BranchID: { $in: branchIds } }, { branchID: { $in: branchIds } }]
+    }).lean();
 
     return res.json({ spaces });
   } catch (error) {
@@ -78,81 +78,121 @@ async function getHostSpaces(req, res) {
   }
 }
 
+// ==========================================
+// TỐI ƯU HÓA: LẤY DANH SÁCH ĐƠN ĐẶT CHỖ
+// ==========================================
 async function getHostBookings(req, res) {
   try {
     const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+      
+       // 1. CHÈN ĐOẠN MÁY HÚT BỤI NÀY VÀO ĐÂY: TỰ ĐỘNG CHỐT ĐƠN HẾT GIỜ
+       const currentTime = new Date();
+       await Booking.updateMany(
+         { 
+           $or: [{ Status: 'in-use' }, { status: 'in-use' }],
+           $or: [{ EndTime: { $lt: currentTime } }, { endTime: { $lt: currentTime } }]
+         },
+         { 
+           $set: { Status: 'completed', status: 'completed' } 
+         },
+         { strict: false }
+       );
+   
+    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
-    // 1. Tìm các chi nhánh của Host này
-    const branches = await Branch.find({ hostID: hostId }).select('_id').lean();
-    const branchIds = branches.map(branch => branch._id);
-    
-    // 2. Tìm các không gian thuộc các chi nhánh đó
-    const spaces = await Space.find({ branchID: { $in: branchIds } }).select('_id').lean();
-    const spaceIds = spaces.map(space => space._id);
-
-    // 3. Lấy danh sách booking và KẾT NỐI (populate) với bảng User và Space để lấy tên hiển thị
-    const bookings = await Booking.find({ spaceID: { $in: spaceIds } })
-      .populate('customerID', 'email') // Lấy email khách hàng
-      .populate('spaceID', 'name') // Lấy tên phòng
+    // Dùng thẳng HostID để tìm Booking (Nhanh gấp 3 lần code cũ)
+    const bookings = await Booking.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    })
+        .populate({ path: 'CustomerID', select: 'email Email FullName', strictPopulate: false })
+      .populate({
+        path: 'SpaceID',
+        // Space schema hiện tại dùng: SpaceCode + Name (viết hoa)
+        // Thêm nhiều biến thể để tương thích dữ liệu cũ
+        select: 'Name Name name SpaceName spaceName SpaceCode Space_Code space_code Space_code SpaceCode_code code spaceCode spaceCode',
+        populate: { path: 'BranchID', select: 'Name name' } // POPULATE THÊM CHI NHÁNH
+      })
       .sort({ createdAt: -1 })
       .lean();
+
       
+    // DEBUG TEMP: kiểm tra SpaceID có populate đúng SpaceCode hay không
+    if (Array.isArray(bookings) && bookings.length > 0) {
+      console.log('[DEBUG] hostBookings sample SpaceID:', {
+        space: bookings[0].SpaceID,
+        spaceCode: bookings[0]?.SpaceID?.SpaceCode,
+        name: bookings[0]?.SpaceID?.Name
+      });
+    }
+
     return res.json({ bookings });
+
   } catch (error) {
     return sendServerError(res, error);
   }
 }
 
 // ==========================================
-// CÁC HÀM HÀNH ĐỘNG MỚI BỔ SUNG CHO HOST
+// CÁC HÀM HÀNH ĐỘNG CỦA HOST
 // ==========================================
 
-/**
- * Host xác nhận đơn (Khi nhận được tiền chuyển khoản)
- */
 async function confirmBooking(req, res) {
   try {
     const { bookingId } = req.params;
 
-    // 1. Tìm đơn hàng
     const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
-    }
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
 
-    // Chỉ xác nhận nếu đơn đang chờ thanh toán
-    if (booking.status !== 'pending') {
+    const currentStatus = booking.Status || booking.status;
+    if (currentStatus !== 'pending') {
       return res.status(400).json({ error: 'Đơn hàng này không ở trạng thái chờ xác nhận.' });
     }
 
-    // 2. Tính toán số tiền Host nhận được
-    // (Lấy Tổng tiền * phần trăm khách đã thanh toán)
-    const amountReceived = (booking.totalAmount * booking.percentagePaid) / 100;
+    // FIX: Dùng updateOne chọc thẳng vào DB, bỏ qua Mongoose Validation
+    await Booking.updateOne(
+      { _id: bookingId },
+      { $set: { Status: 'confirmed', status: 'confirmed' } }
+    );
+
+    const total = booking.TotalAmount || booking.totalAmount || 0;
+    const deposit = booking.DepositAmount || 0;
     
-    // Xác định xem đây là thanh toán cọc hay thanh toán đủ
-    const paymentType = booking.percentagePaid === 100 ? 'full_payment' : 'deposit';
+    let amountReceived = deposit;
+    let paymentType = 'deposit';
 
-    // 3. Đổi trạng thái đơn thành 'confirmed'
-    booking.status = 'confirmed';
-    await booking.save();
+    if (booking.percentagePaid !== undefined) {
+      amountReceived = (total * booking.percentagePaid) / 100;
+      paymentType = booking.percentagePaid === 100 ? 'full_payment' : 'deposit';
+    } else {
+      paymentType = deposit >= total ? 'full_payment' : 'deposit';
+    }
 
-    // 4. Tạo lịch sử thanh toán thành công (Payment_History)
-    const payment = await PaymentHistory.create({
-      bookingID: booking._id,
-      amount: amountReceived,
-      paymentType: paymentType,
-      paymentMethod: 'bank_transfer', // Host check tay nên mặc định là chuyển khoản
-      status: 'successful'
-    });
-
-    return res.status(200).json({ 
-      message: 'Xác nhận đơn và ghi nhận thanh toán thành công.',
-      booking,
-      payment
-    });
+    // Bọc try-catch riêng cho PaymentHistory để không làm sập tiến trình duyệt đơn
+    try {
+      await PaymentHistory.create({
+        BookingID: booking._id,
+        CustomerID: booking.CustomerID || booking.customerID,
+        HostID: booking.HostID || booking.hostID,
+        TransactionCode: `TXN-CONFIRM-${Math.floor(Math.random() * 100000)}`, // Tạo mã giao dịch ngẫu nhiên
+        Amount: amountReceived,
+        PaymentType: paymentType,
+        PaymentMethod: 'bank_transfer',
+        Status: 'successful'
+      });
+      console.log('✅ Đã ghi nhận lịch sử thanh toán thành công!');
+    } catch (paymentErr) {
+      console.log('⚠️ Lưu ý: Không thể ghi nhận lịch sử thanh toán:', paymentErr.message);
+    }
+    
+    if (global.io) {
+        // Phát tín hiệu mang tên 'booking_status_updated' kèm data
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'confirmed'
+        });
+    }
+    
+    return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
 
   } catch (error) {
     return sendServerError(res, error);
@@ -160,29 +200,85 @@ async function confirmBooking(req, res) {
 }
 
 /**
- * Host từ chối đơn (Do hết phòng, khách boom, hoặc sự cố)
+ * Host xác nhận khách đến nhận phòng (Chuyển sang in-use)
  */
+async function checkinBooking(req, res) {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    const currentStatus = booking.Status || booking.status;
+    if (currentStatus !== 'confirmed') {
+      return res.status(400).json({ error: 'Chỉ có thể nhận phòng với đơn đã được xác nhận.' });
+    }
+
+    // Đảm bảo số tiền được ép kiểu về dạng số
+    const total = Number(booking.TotalAmount || booking.totalAmount || 0);
+
+    // BẬT BÙA HỘ MỆNH: strict: false giúp bỏ qua mọi rào cản của Schema
+    await Booking.updateOne(
+      { _id: bookingId },
+      { 
+        $set: { 
+          Status: 'in-use', 
+          status: 'in-use',
+          DepositAmount: total,       
+          depositAmount: total,
+          percentagePaid: 100         
+        } 
+      },
+      { strict: false } 
+    );
+    
+    if (global.io) {
+        // Sửa newStatus thành in-use
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'in-use' 
+        });
+    }
+    
+    return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận thu đủ 100% tiền!' });
+  } catch (error) {
+    // In lỗi chi tiết ra Terminal màu đen
+    console.error("LỖI CHECK-IN THỰC SỰ LÀ:", error);
+    
+    // TRẢ THẲNG MÃ LỖI RA GIAO DIỆN ĐỂ BẮT BỆNH, BỎ QUA HÀM CỦA HỆ THỐNG
+    return res.status(500).json({ error: `Chi tiết lỗi Server: ${error.message}` });
+  }
+}
+
+
 async function cancelBooking(req, res) {
   try {
     const { bookingId } = req.params;
 
     const booking = await Booking.findById(bookingId);
-    if (!booking) {
-      return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    const currentStatus = booking.Status || booking.status;
+    
+    // Cho phép hủy cả đơn 'pending' (Host từ chối) VÀ đơn 'confirmed' (Khách vắng mặt)
+    if (currentStatus !== 'pending' && currentStatus !== 'confirmed') {
+      return res.status(400).json({ error: 'Chỉ có thể hủy đơn đang chờ hoặc đơn đã xác nhận.' });
     }
 
-    if (booking.status !== 'pending') {
-      return res.status(400).json({ error: 'Chỉ có thể từ chối các đơn hàng đang chờ.' });
+    await Booking.updateOne(
+      { _id: bookingId },
+      { $set: { Status: 'cancelled', status: 'cancelled' } }
+    );
+    
+    if (global.io) {
+        // Sửa newStatus thành cancelled
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'cancelled'
+        });
     }
-
-    // Chuyển trạng thái sang bị hủy
-    booking.status = 'cancelled';
-    await booking.save();
-
-    return res.status(200).json({ 
-      message: 'Đã từ chối đơn hàng thành công.',
-      booking 
-    });
+    
+    return res.status(200).json({ message: 'Đã hủy đơn hàng thành công.' });
   } catch (error) {
     return sendServerError(res, error);
   }
@@ -194,6 +290,7 @@ module.exports = {
   getHostBranches,
   getHostSpaces,
   getHostBookings,
-  confirmBooking, // Export hàm mới
-  cancelBooking   // Export hàm mới
+  confirmBooking, 
+  cancelBooking,
+  checkinBooking  
 };

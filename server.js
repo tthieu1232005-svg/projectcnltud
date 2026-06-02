@@ -1,4 +1,7 @@
+const MONGODB_URI = 'mongodb://127.0.0.1:27017/coworking_db';
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const expressLayouts = require('express-ejs-layouts');
 const path = require('path');
 require('dotenv').config();
@@ -7,32 +10,31 @@ const { connectDB } = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const hostRoutes = require('./routes/hostRoutes');
-const adminRoutes = require('./routes/adminroutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-// --- Kết nối MongoDB ---
-connectDB()
-    .then(() => {
-        console.log('✅ MongoDB connected, starting server...');
-        app.listen(PORT, () => {
-            console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
-            console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
-        });
-    })
-    .catch(err => {
-        console.error('❌ Không thể kết nối MongoDB, server không khởi động:', err);
-        process.exit(1);
-    });
+// Khai báo io là biến toàn cục để các Controller khác có thể lấy ra dùng
+global.io = io;
 
-// Tài nguyên tĩnh: dùng chung (public)
-app.use(express.static(path.join(__dirname, 'public')));
+// Lắng nghe kết nối từ trình duyệt
+io.on('connection', (socket) => {
+    console.log('Một thiết bị vừa kết nối:', socket.id);
+
+    socket.on('disconnect', () => {
+        console.log('Thiết bị đã ngắt kết nối:', socket.id);
+    });
+});
 
 // --- Middleware xử lý dữ liệu ---
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Cấp quyền cho phép trình duyệt đọc các file tĩnh (như css, js, hình ảnh)
+app.use(express.static(path.join(__dirname, 'public')));
 
 // ==========================================
 // KHAI BÁO CÁC API ROUTES (Xử lý dữ liệu ngầm)
@@ -42,7 +44,6 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/hosts', hostRoutes);
 app.use('/api/admin', adminRoutes);
 
-
 // ==========================================
 // CẤU HÌNH VIEW ENGINE (Render Giao diện EJS)
 // ==========================================
@@ -50,7 +51,6 @@ app.use(expressLayouts);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('layout', 'layout');
-
 
 // ==========================================
 // KHAI BÁO CÁC WEB ROUTES (Điều hướng trang)
@@ -119,7 +119,11 @@ app.get('/host/payments', (req, res) => {
     res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
-// --- Admin: (chưa triển khai) ---
+/// --- Admin: (Giao diện) ---
+app.get('/admin/dashboard', (req, res) => {
+    // Truyền thêm file admin-main.js vào layout
+    res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
 
 // ==========================================
 // MIDDLEWARE XỬ LÝ LỖI TỔNG
@@ -131,3 +135,20 @@ app.use((err, req, res, next) => {
         message: err.message || 'Đã xảy ra lỗi server'
     });
 });
+
+// ==========================================
+// KẾT NỐI MONGODB & KHỞI ĐỘNG SERVER
+// ==========================================
+connectDB()
+    .then(() => {
+        console.log('✅ MongoDB connected, starting server...');
+        // CHÚ Ý CHỖ NÀY: Dùng server.listen, TUYỆT ĐỐI KHÔNG DÙNG app.listen
+        server.listen(PORT, () => {
+            console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
+            console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
+        });
+    })
+    .catch(err => {
+        console.error('❌ Không thể kết nối MongoDB, server không khởi động:', err);
+        process.exit(1);
+    });

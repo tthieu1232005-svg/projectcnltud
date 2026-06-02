@@ -1,43 +1,55 @@
 const mongoose = require('mongoose');
 
 const customerProfileSchema = new mongoose.Schema({
-  userID: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  fullName: {
-    type: String,
-    trim: true,
-    required: true
-  },
-  phone: {
-    type: String,
-    trim: true
-  },
-  description: {
-    type: String,
-    trim: true
-  },
-  jobTitle: {
-    type: String,
-    trim: true
-  },
-  company: {
-    type: String,
-    trim: true
-  },
-  bankName: {
-    type: String,
-    trim: true
-  },
-  bankNumber: {
-    type: String,
-    trim: true
-  }
+    // 1. LIÊN KẾT 1-1 VỚI BẢNG USER
+    UserID: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true,
+        unique: true // CỰC KỲ QUAN TRỌNG: Đảm bảo 1 User chỉ có duy nhất 1 Profile
+    },
+    Avatar: { // Ảnh đại diện người dùng (URL Cloudinary/S3)
+        type: String,
+        default: ""
+    },
+    Phone: {
+        type: String,
+        trim: true,
+        index: true // Đặt Index để Admin dễ dàng tìm kiếm khách hàng qua số điện thoại
+    },
+
+    // 3. THÔNG TIN CÔNG VIỆC & NETWORKING
+    Description: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    JobTitle: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    Company: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+
+    // 4. THÔNG TIN TÀI CHÍNH (Phục vụ cho việc Host hoàn cọc)
+    BankName: {
+        type: String,
+        trim: true,
+        default: ""
+    },
+    BankNumber: {
+        type: String,
+        trim: true,
+        default: ""
+    }
+
 }, {
-  collection: 'customer_profiles',
-  timestamps: true
+    collection: 'customer_profiles',
+    timestamps: true
 });
 
 module.exports = mongoose.model('CustomerProfile', customerProfileSchema);

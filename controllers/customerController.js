@@ -1,7 +1,8 @@
 const User = require('../models/User');
 const CustomerProfile = require('../models/Customer_Profile');
 const Booking = require('../models/Booking');
-const PaymentHistory = require('../models/Payment_History'); // Thêm model để ghi nhận thanh toán lần 2
+const PaymentHistory = require('../models/Payment_History');
+const Review = require('../models/Review');
 
 function sendServerError(res, error) {
   console.error(error);
@@ -11,15 +12,11 @@ function sendServerError(res, error) {
 async function getCustomerProfile(req, res) {
   try {
     const { userId } = req.params;
-    if (!userId) {
-      return res.status(400).json({ error: 'Thiếu userId.' });
-    }
+    if (!userId) return res.status(400).json({ error: 'Thiếu userId.' });
 
-    const profile = await CustomerProfile.findOne({ userID: userId }).lean();
-    const user = await User.findById(userId).select('-passwordHash').lean();
-    if (!user) {
-      return res.status(404).json({ error: 'Người dùng không tìm thấy.' });
-    }
+    const profile = await CustomerProfile.findOne({ UserID: userId }).lean(); // Cập nhật UserID
+    const user = await User.findById(userId).select('-PasswordHash').lean(); // Cập nhật PasswordHash
+    if (!user) return res.status(404).json({ error: 'Người dùng không tìm thấy.' });
 
     return res.json({ user, profile });
   } catch (error) {
@@ -31,12 +28,10 @@ async function updateCustomerProfile(req, res) {
   try {
     const { userId } = req.params;
     const update = req.body;
-    if (!userId) {
-      return res.status(400).json({ error: 'Thiếu userId.' });
-    }
+    if (!userId) return res.status(400).json({ error: 'Thiếu userId.' });
 
     const profile = await CustomerProfile.findOneAndUpdate(
-      { userID: userId },
+      { UserID: userId }, // Cập nhật UserID
       { $set: update },
       { new: true, upsert: true, setDefaultsOnInsert: true }
     ).lean();
@@ -47,80 +42,130 @@ async function updateCustomerProfile(req, res) {
   }
 }
 
+// === CẬP NHẬT TRONG FILE customerController.js ===
 async function getCustomerBookings(req, res) {
   try {
     const { userId } = req.params;
-    if (!userId) {
-      return res.status(400).json({ error: 'Thiếu userId.' });
-    }
+    if (!userId) return res.status(400).json({ error: 'Thiếu userId.' });
 
-    const bookings = await Booking.find({ customerID: userId })
-      .populate('spaceID', 'name') // Lấy thêm tên phòng để hiển thị ra lịch sử
+    // SỬA Ở ĐÂY: Thêm populate lồng nhau (Nested Populate) để lấy được Branch (Địa chỉ, Hotline)
+    const bookings = await Booking.find({ CustomerID: userId })
+      .populate({
+        path: 'SpaceID',
+        select: 'Name Images SpaceCode BranchID',
+        populate: { path: 'BranchID', select: 'Name Address Hotline' } // Lấy thông tin cơ sở
+      })
       .sort({ createdAt: -1 })
       .lean();
 
-    return res.json({ bookings });
+    const bookingIds = bookings.map(b => b._id);
+    const reviews = await Review.find({ BookingID: { $in: bookingIds } }).lean();
+    const reviewMap = {};
+    reviews.forEach(r => reviewMap[r.BookingID.toString()] = r);
+
+    const now = new Date();
+    
+    const result = bookings.map(b => {
+       const review = reviewMap[b._id.toString()];
+       let canReview = false;
+       let canEditReview = false;
+       
+       if (b.Status === 'completed' || b.status === 'completed') {
+           if (!review) {
+               canReview = true;
+           } else {
+               const daysSinceReview = (now - new Date(review.createdAt)) / (1000 * 3600 * 24);
+               if (daysSinceReview <= 7) canEditReview = true;
+           }
+       }
+       return { ...b, ReviewData: review, canReview, canEditReview };
+    });
+
+    return res.json({ bookings: result });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
 
-// ==========================================
-// CÁC HÀM HÀNH ĐỘNG MỚI BỔ SUNG CHO CUSTOMER
-// ==========================================
+// 2. Thêm hàm mới: submitReview
+async function submitReview(req, res) {
+  try {
+    const { userId, bookingId } = req.params;
+    const { rating, comment } = req.body;
 
-/**
- * Khách hàng tạo đơn đặt chỗ mới (Trạng thái mặc định: pending)
- */
+    const booking = await Booking.findOne({ _id: bookingId, CustomerID: userId });
+    if (!booking || booking.Status !== 'completed') {
+      return res.status(400).json({ error: 'Đơn hàng không hợp lệ hoặc chưa hoàn tất.' });
+    }
+
+    let review = await Review.findOne({ BookingID: bookingId });
+
+    if (review) {
+      // Sửa đánh giá (Kiểm tra 7 ngày)
+      const daysSinceReview = (new Date() - new Date(review.createdAt)) / (1000 * 3600 * 24);
+      if (daysSinceReview > 7) {
+        return res.status(400).json({ error: 'Đã quá 7 ngày, bạn không thể chỉnh sửa đánh giá.' });
+      }
+      review.Rating = rating;
+      review.Comment = comment;
+      await review.save();
+      return res.json({ message: 'Cập nhật đánh giá thành công!', review });
+    } else {
+      // Viết đánh giá mới
+      review = await Review.create({
+        SpaceID: booking.SpaceID,
+        CustomerID: userId,
+        BookingID: bookingId,
+        Rating: rating,
+        Comment: comment
+      });
+      return res.json({ message: 'Cảm ơn bạn đã đánh giá!', review });
+    }
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
 async function createBooking(req, res) {
   try {
     const { userId } = req.params;
-    const { spaceID, startTime, endTime, totalAmount } = req.body;
+    // Tạm giả định hostId được gửi lên từ client khi đặt phòng
+    const { spaceID, hostId, startTime, endTime, totalAmount } = req.body;
 
-    // Kiểm tra dữ liệu đầu vào cơ bản
-    if (!spaceID || !startTime || !endTime || totalAmount === undefined) {
+    if (!spaceID || !hostId || !startTime || !endTime || totalAmount === undefined) {
       return res.status(400).json({ error: 'Vui lòng cung cấp đầy đủ thông tin đặt chỗ.' });
     }
 
-    // Tạo đơn hàng mới
+    // Đổi toàn bộ key sang PascalCase để khớp với nhánh main
     const newBooking = await Booking.create({
-      customerID: userId,
-      spaceID,
-      startTime,
-      endTime,
-      totalAmount,
-      status: 'pending', // Đơn mới luôn ở trạng thái chờ thanh toán cọc/xác nhận
-      percentagePaid: 0,
-      CreatedAt: new Date() // Truyền tay để vượt qua validation "required: true" ở Model Booking.js
+      CustomerID: userId,
+      SpaceID: spaceID,
+      HostID: hostId,
+      StartTime: startTime,
+      EndTime: endTime,
+      TotalAmount: totalAmount,
+      DepositAmount: 0, // Thay thế cho percentagePaid
+      Status: 'pending'
     });
 
-    return res.status(201).json({ 
-      message: 'Tạo đơn đặt chỗ thành công. Vui lòng chờ Host xác nhận.', 
-      booking: newBooking 
-    });
+    return res.status(201).json({ message: 'Tạo đơn đặt chỗ thành công.', booking: newBooking });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
 
-/**
- * Khách hàng tự hủy đơn khi đơn vẫn đang ở trạng thái pending
- */
 async function cancelBooking(req, res) {
   try {
     const { userId, bookingId } = req.params;
 
-    const booking = await Booking.findOne({ _id: bookingId, customerID: userId });
-    if (!booking) {
-      return res.status(404).json({ error: 'Không tìm thấy đơn hàng của bạn.' });
-    }
+    const booking = await Booking.findOne({ _id: bookingId, CustomerID: userId });
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng của bạn.' });
 
-    // Chỉ cho phép khách hủy nếu đơn chưa được Host xác nhận
-    if (booking.status !== 'pending') {
+    if (booking.Status !== 'pending') {
       return res.status(400).json({ error: 'Chỉ có thể hủy đơn hàng đang trong trạng thái chờ.' });
     }
 
-    booking.status = 'cancelled';
+    booking.Status = 'cancelled';
     await booking.save();
 
     return res.json({ message: 'Bạn đã hủy đơn đặt chỗ thành công.', booking });
@@ -129,50 +174,37 @@ async function cancelBooking(req, res) {
   }
 }
 
-/**
- * Khách hàng thanh toán phần tiền còn lại (Khi đến nhận phòng hoặc check-out)
- */
 async function payRemainder(req, res) {
   try {
     const { userId, bookingId } = req.params;
 
-    const booking = await Booking.findOne({ _id: bookingId, customerID: userId });
-    if (!booking) {
-      return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+    const booking = await Booking.findOne({ _id: bookingId, CustomerID: userId });
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    if (booking.Status !== 'confirmed') {
+      return res.status(400).json({ error: 'Đơn hàng chưa được xác nhận.' });
     }
 
-    // Phải là đơn đã được confirm (đã cọc) thì mới có phần còn lại để trả
-    if (booking.status !== 'confirmed') {
-      return res.status(400).json({ error: 'Đơn hàng này chưa được xác nhận, không thể thanh toán tiếp.' });
-    }
-
-    // Nếu đã trả 100% rồi thì chặn lại
-    if (booking.percentagePaid >= 100) {
+    // Logic mới: Kiểm tra nếu Tiền cọc đã bằng Tổng tiền thì chặn
+    if (booking.DepositAmount >= booking.TotalAmount) {
       return res.status(400).json({ error: 'Đơn hàng này đã được thanh toán đầy đủ.' });
     }
 
-    // Tính toán số tiền còn lại phải trả
-    const remainingAmount = booking.totalAmount * (1 - booking.percentagePaid / 100);
-
-    // Cập nhật trạng thái thanh toán của Booking lên 100%
-    booking.percentagePaid = 100;
-    // Tùy luồng nghiệp vụ, nếu check-out luôn thì bạn có thể set: booking.status = 'completed';
+    const remainingAmount = booking.TotalAmount - booking.DepositAmount;
+    
+    // Cập nhật tiền đã trả bằng tổng tiền
+    booking.DepositAmount = booking.TotalAmount;
     await booking.save();
 
-    // Ghi nhận bản ghi thanh toán thứ 2 vào lịch sử
     const payment = await PaymentHistory.create({
       bookingID: booking._id,
       amount: remainingAmount,
-      paymentType: 'full_payment', // Thanh toán nốt
-      paymentMethod: req.body.paymentMethod || 'cash', // Mặc định là khách trả tiền mặt tại quầy, hoặc lấy từ request
+      paymentType: 'full_payment',
+      paymentMethod: req.body.paymentMethod || 'cash',
       status: 'successful'
     });
 
-    return res.json({ 
-      message: 'Thanh toán phần còn lại thành công.', 
-      booking, 
-      payment 
-    });
+    return res.json({ message: 'Thanh toán phần còn lại thành công.', booking, payment });
   } catch (error) {
     return sendServerError(res, error);
   }
@@ -182,7 +214,8 @@ module.exports = {
   getCustomerProfile,
   updateCustomerProfile,
   getCustomerBookings,
-  createBooking,  // Export hàm mới
-  cancelBooking,  // Export hàm mới
-  payRemainder    // Export hàm mới
+  createBooking,
+  cancelBooking,
+  payRemainder,
+  submitReview
 };
