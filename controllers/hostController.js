@@ -121,7 +121,7 @@ async function buildExcelBuffer(rows, reportTotals) {
   ws.getCell(`A${summaryStartRow}`).value = 'TÓM TẮT BÁO CÁO';
   ws.getCell(`A${summaryStartRow}`).font = { bold: true, size: 12 };
   ws.getCell(`A${summaryStartRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFF6FF' } };
-  ws.merge(`A${summaryStartRow}:B${summaryStartRow}`);
+  ws.mergeCells(`A${summaryStartRow}:B${summaryStartRow}`);
 
   const summaryData = [
     { label: 'Tổng giá trị giao dịch (GMV)', value: reportTotals.gmvText },

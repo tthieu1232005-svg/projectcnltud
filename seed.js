@@ -43,7 +43,7 @@ async function seed() {
       Avatar: '',
       Phone: '0900000001',
       BankName: 'Vietcombank',
-      BankNumber: '1111111111',
+      BankNumber: '1111111111', 
     },
     {
       UserID: customers[1]._id,
