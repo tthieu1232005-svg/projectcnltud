@@ -47,4 +47,5 @@ const bookingSchema = new mongoose.Schema({
 // Đây là "vũ khí bí mật" giúp API kiểm tra trùng lịch chạy nhanh gấp 10 lần
 bookingSchema.index({ SpaceID: 1, StartTime: 1, EndTime: 1 });
 
-module.exports = mongoose.model('Booking', bookingSchema, 'Bookings');
+module.exports = mongoose.model('Booking', bookingSchema);
+

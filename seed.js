@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
-
 const User = require('./models/User');
 const CustomerProfile = require('./models/customer_Profile');
 const HostProfile = require('./models/host_Profile');
@@ -11,7 +10,7 @@ const PaymentHistory = require('./models/Payment_History');
 const Review = require('./models/Review');
 
 async function seed() {
-  const MONGODB_URI = 'mongodb://127.0.0.1:27017/coworking_db';
+  const MONGODB_URI = process.env.MONGODB_URI;
 
   await mongoose.connect(MONGODB_URI, { autoIndex: true });
 
