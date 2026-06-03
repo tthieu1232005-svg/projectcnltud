@@ -1,86 +1,118 @@
 const express = require('express');
 const expressLayouts = require('express-ejs-layouts');
 const path = require('path');
+require('dotenv').config();
+const { connectDB } = require('./config/db');
+
+const authRoutes = require('./routes/authRoutes');
+const customerRoutes = require('./routes/customerRoutes');
+const hostRoutes = require('./routes/hostRoutes');
+const adminRoutes = require('./routes/adminRoutes');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
-// Tài nguyên tĩnh: dùng chung (public) + Host (Host/public)
+// --- Kết nối MongoDB ---
+connectDB()
+    .then(() => {
+        console.log('✅ MongoDB connected, starting server...');
+        app.listen(PORT, () => {
+            console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
+            console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
+        });
+    })
+    .catch(err => {
+        console.error('❌ Không thể kết nối MongoDB, server không khởi động:', err);
+        process.exit(1);
+    });
+
+// ==========================================
+// MIDDLEWARE
+// ==========================================
+// Body parser - PHẢI ĐỂ TRƯỚC routes
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// Tài nguyên tĩnh
 app.use(express.static(path.join(__dirname, 'public')));
-app.use(express.static(path.join(__dirname, 'Host/public')));
 
-// View Engine: root project — Customer/, Host/, views/ (layout & partials dùng chung)
+// View Engine
 app.use(expressLayouts);
 app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname));
-app.set('layout', 'views/layout');
+app.set('views', path.join(__dirname, 'views'));
+app.set('layout', 'layout'); 
 
-// --- Luồng Khách hàng (Customer) ---
-app.get('/', (req, res) => {
-    res.render('Customer/pages/home');
+// Set default locals
+app.use((req, res, next) => {
+    res.locals.branches = [];
+    res.locals.keyword = "";
+    next();
 });
 
-app.get('/search', (req, res) => {
-    res.render('Customer/pages/search');
-});
-
-app.get('/detail', (req, res) => {
-    res.render('Customer/pages/detail');
-});
-
-app.get('/payment', (req, res) => {
-    res.render('Customer/pages/payment');
-});
-
-app.get('/history', (req, res) => {
-    res.render('Customer/pages/history');
-});
-
-app.get('/payment_history', (req, res) => {
-    res.render('Customer/pages/payment_history');
-});
-
-app.get('/profile', (req, res) => {
-    res.render('Customer/pages/profile');
-});
-
-// --- Luồng Dùng chung (đặt trong Customer) ---
+// ==========================================
+// ROUTES
+// ==========================================
+// Authentication Routes
 app.get('/login', (req, res) => {
-    res.render('Customer/pages/login');
+    res.render('customer/login');
 });
 
 app.get('/register', (req, res) => {
-    res.render('Customer/pages/register');
+    res.render('customer/register');
 });
 
-// --- Luồng Chủ cơ sở (Host) ---
+// Customer Routes (Page + API)
+app.use('/', customerRoutes);
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/hosts', hostRoutes);
+app.use('/api/admin', adminRoutes);
+
+// ==========================================
+// HOST ROUTES
+// ==========================================
 app.get('/host/profile', (req, res) => {
-    res.render('Host/pages/profile');
+    res.render('host/profile', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
 app.get('/host/dashboard', (req, res) => {
-    res.render('Host/pages/dashboard');
+    res.render('host/dashboard', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
 app.get('/host/spaces', (req, res) => {
-    res.render('Host/pages/spaces');
+    res.render('host/spaces', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
 app.get('/host/bookings', (req, res) => {
-    res.render('Host/pages/bookings');
+    res.render('host/bookings', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
 app.get('/host/reports', (req, res) => {
-    res.render('Host/pages/reports');
+    res.render('host/reports', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
 app.get('/host/payments', (req, res) => {
-    res.render('Host/pages/payments');
+    res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
-// --- Admin: (chưa triển khai) ---
-
-app.listen(PORT, () => {
-    console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
-    console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
+// ==========================================
+// ADMIN ROUTES
+// ==========================================
+app.get('/admin/dashboard', (req, res) => {
+    res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
+
+// ==========================================
+// ERROR HANDLING MIDDLEWARE
+// ==========================================
+app.use((err, req, res, next) => {
+    console.error('❌ Lỗi server:', err);
+    res.status(err.status || 500).json({
+        status: 'error',
+        message: err.message || 'Đã xảy ra lỗi server'
+    });
+});
+
+module.exports = app;
