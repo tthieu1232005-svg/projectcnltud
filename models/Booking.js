@@ -32,7 +32,7 @@ const bookingSchema = new mongoose.Schema({
     // 4. TRẠNG THÁI VÀ GHI CHÚ
     Status: { 
         type: String, 
-        enum: ['pending', 'confirmed', 'completed', 'cancelled'], 
+        enum: ['pending', 'confirmed','in-use', 'completed', 'cancelled'], 
         default: 'pending',
         index: true 
     },
