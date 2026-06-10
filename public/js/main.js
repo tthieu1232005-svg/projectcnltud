@@ -12,11 +12,19 @@ const menus = {
     'host': [
         { id: 'host_dashboard', label: 'Dashboard', icon: '📊' }, 
         { id: 'host_spaces', label: 'Quản lý không gian', icon: '🏢' }, 
-        { id: 'host_bookings', label: 'Đơn đặt chỗ', icon: '📋' }, 
+        { id: 'host_bookings', label: 'Quản lý đơn', icon: '📋' }, 
         { id: 'host_reports', label: 'Báo cáo', icon: '💰' }, 
         { id: 'host_payments', label: 'Lịch sử tiền', icon: '💳' }, 
         { id: 'host_profile', label: 'Hồ sơ', icon: '👤' }
-    ] 
+    ],
+    'admin': [
+        { id: 'admin_dashboard', label: 'Bảng điều khiển', icon: '📊' }, 
+        { id: 'admin_users', label: 'Người dùng', icon: '👥' }, 
+        { id: 'admin_hosts', label: 'Chủ cơ sở', icon: '🏢' }, 
+        { id: 'admin_branches', label: 'Chi nhánh', icon: '🏪' }, 
+        { id: 'admin_bookings', label: 'Đơn đặt chỗ', icon: '📋' }, 
+        { id: 'admin_reviews', label: 'Đánh giá', icon: '⭐' }
+    ]
 };
 
 // ==========================================
@@ -31,13 +39,22 @@ function navigateTo(id) {
         'history': '/history', 
         'payment_history': '/payment_history', 
         'profile': '/profile',
-        'host_profile': '/host/profile',
+
         'login': '/login', 
+
+        'host_profile': '/host/profile',
         'host_dashboard': '/host/dashboard', 
         'host_spaces': '/host/spaces',
         'host_bookings': '/host/bookings',
         'host_reports': '/host/reports',
-        'host_payments': '/host/payments'
+        'host_payments': '/host/payments',
+
+        'admin_dashboard': '/admin/dashboard',
+        'admin_users': '/admin/users',
+        'admin_hosts': '/admin/hosts',
+        'admin_branches': '/admin/branches',
+        'admin_reviews': '/admin/reviews',
+        'admin_bookings': '/admin/bookings'
     };
     
     if (routes[id]) {
@@ -150,7 +167,9 @@ function renderMenu(currentRole) {
         let expectedPath = '/' + i.id;
         if (i.id === 'home') expectedPath = '/';
         else if (i.id.startsWith('host_')) expectedPath = '/host/' + i.id.replace('host_', '');
-
+        else if (i.id.startsWith('admin_')) { 
+                    expectedPath = '/admin/' + i.id.replace('admin_', '');
+                }
         if (window.location.pathname === expectedPath) {
             d.classList.add('active');
         }

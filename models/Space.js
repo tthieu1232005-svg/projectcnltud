@@ -67,7 +67,10 @@ const spaceSchema = new mongoose.Schema({
     // 5. TRẠNG THÁI & THỐNG KÊ (STATUS & STATS)
     Status: { 
         type: String,
-        enum: ['available', 'maintenance', 'inactive'],
+        enum: ['available'
+            , 'maintenance'// Tạm khóa để bảo trì, sửa chữa
+            , 'inactive'//Tạm khóa vì đang có khách sử dụng/Chờ dọn dẹp
+        ],
         default: 'available',
         index: true
     },
