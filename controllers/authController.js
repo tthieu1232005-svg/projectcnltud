@@ -31,7 +31,7 @@ async function registerUser(req, res) {
     try {
         const { email, password, fullName, role, companyName, taxCode, phone, bankName, bankNumber } = req.body;
 
-        // 1. KIỂM TRA ĐẦU VÀO CƠ BẢN TRƯỚC (Chưa đụng tới Database)
+        // 1. KIỂM TRA ĐẦU VÀO CƠ BẢN
         if (!email || !password || !fullName || !phone || !bankName || !bankNumber) {
             return res.status(400).json({ error: 'Vui lòng nhập đầy đủ thông tin bắt buộc!' });
         }
@@ -45,23 +45,24 @@ async function registerUser(req, res) {
             return res.status(400).json({ error: 'Role không hợp lệ.' });
         }
 
-        // 2. KIỂM TRA ĐẦU VÀO RIÊNG CỦA HOST (Quan trọng: Đưa lên trước khi lưu User)
+        // 2. KIỂM TRA ĐẦU VÀO RIÊNG CỦA HOST
         if (normalizedRole === 'host') {
             if (!companyName || !taxCode) {
                 return res.status(400).json({ error: 'Host bắt buộc nhập Tên công ty và Mã số thuế!' });
             }
-            if (!req.file) { // Trạm gác multer báo không có file
+            // Multer xử lý thành công sẽ nạp dữ liệu vào req.file
+            if (!req.file) { 
                 return res.status(400).json({ error: 'Vui lòng tải lên Giấy phép kinh doanh!' });
             }
         }
 
-        // 3. KIỂM TRA EMAIL TRÙNG LẶP TRONG DB
+        // 3. KIỂM TRA EMAIL TRÙNG LẶP
         const existingUser = await User.findOne({ Email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ error: 'Email này đã được đăng ký!' });
         }
 
-        // 4. BẮT ĐẦU VÀO VÙNG LƯU DỮ LIỆU (Khi mọi thứ đã an toàn 100%)
+        // 4. MÃ HÓA MẬT KHẨU VÀ TẠO USER
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(String(password), salt);
 
@@ -73,13 +74,13 @@ async function registerUser(req, res) {
             Status: 'active'
         });
 
-        // 5. TẠO PROFILE (Với biến taxCode viết chuẩn xác)
+        // 5. TẠO PROFILE TƯƠNG ỨNG
         if (normalizedRole === 'host') {
             await HostProfile.create({
                 UserID: user._id,
                 CompanyName: String(companyName).trim(),
-                TaxCode: String(taxCode).trim(), // Đã sửa lỗi biến tại đây
-                VerificationDocument: req.file.path, // Lấy link ảnh từ multer/cloudinary
+                TaxCode: String(taxCode).trim(), 
+                VerificationDocument: req.file.path, // Đường link URL từ Cloudinary tự động được lưu tại đây
                 Logo: "",
                 Hotline: String(phone).trim(),
                 IsVerified: false,
@@ -102,7 +103,6 @@ async function registerUser(req, res) {
         return sendServerError(res, error);
     }
 }
-
 // ================= LOGIC ĐĂNG NHẬP (PROMPT 2) =================
 async function loginUser(req, res) {
     try {
