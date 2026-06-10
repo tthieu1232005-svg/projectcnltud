@@ -15,9 +15,10 @@ const storage = new CloudinaryStorage({
   params: async (req, file) => {
     // Tự động gom nhóm ảnh vào các thư mục riêng trên Cloudinary dựa theo tên trường (fieldname)
     let folderName = 'coworking/misc';
-    if (file.fieldname === 'avatar'|| file.fieldname === 'LogoFile') folderName = 'coworking/avatars';
+    if (file.fieldname === 'customerAvatar'|| file.fieldname === 'LogoFile') folderName = 'coworking/avatars';
     if (file.fieldname === 'verificationDocument') folderName = 'coworking/licenses';
-    if (file.fieldname === 'images' || file.fieldname === 'logo') folderName = 'coworking/spaces';
+    if (file.fieldname === 'spaceImage') folderName = 'coworking/spaces';
+    if (file.fieldname === 'branchImage') folderName = 'coworking/branchs';
 
     return {
       folder: folderName,
