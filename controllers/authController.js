@@ -169,8 +169,99 @@ function logoutUser(req, res) {
     return res.json({ message: 'Đăng xuất thành công.' });
 }
 
+
+// ================= BỘ NHỚ TẠM LƯU MÃ OTP MÔ PHỎNG ("Quên mật khẩu?" ở trang Đăng nhập)=================
+// Lưu cấu trúc dạng: { "email@gmail.com": { otp: "123456", expires: 17189012345 } }
+const otpCache = {};
+
+// Bước 1: Kiểm tra Email và Sinh mã OTP in ra Console
+async function forgotPassword(req, res) {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Vui lòng nhập Email!' });
+
+        const normalizedEmail = normalizeEmail(email);
+        
+        // Kiểm tra xem email có tồn tại trên hệ thống không
+        const user = await User.findOne({ Email: normalizedEmail });
+        if (!user) {
+            return res.status(404).json({ error: 'Email này không tồn tại trong hệ thống!' });
+        }
+
+        // Sinh mã OTP ngẫu nhiên gồm 6 chữ số
+        const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+        
+        // Lưu mã OTP vào bộ nhớ tạm, hết hạn sau 5 phút
+        otpCache[normalizedEmail] = {
+            otp: generatedOtp,
+            expires: Date.now() + 5 * 60 * 1000 
+        };
+
+        // KỸ THUẬT MOCKING: In mã OTP ra màn hình Terminal của Nhóm trưởng
+        console.log('\n======================================================');
+        console.log(`🔥 [MOCK OTP] YÊU CẦU QUÊN MẬT KHẨU TỪ: ${normalizedEmail}`);
+        console.log(`🔑 MÃ OTP XÁC THỰC CỦA BẠN LÀ: ${generatedOtp}`);
+        console.log('======================================================\n');
+
+        return res.status(200).json({ 
+            message: 'Mã xác nhận OTP đã được gửi hệ thống (Hãy kiểm tra Terminal máy chủ)!' 
+        });
+
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+}
+
+// Bước 2: Xác thực mã OTP và Tiến hành cập nhật mật khẩu mới
+async function resetPassword(req, res) {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ error: 'Vui lòng điền đầy đủ tất cả các trường!' });
+        }
+        if (!isValidPassword(newPassword)) {
+            return res.status(400).json({ error: 'Mật khẩu mới phải >= 6 ký tự, bao gồm cả chữ và số!' });
+        }
+
+        const normalizedEmail = normalizeEmail(email);
+        const cachedData = otpCache[normalizedEmail];
+
+        // 1. Kiểm tra mã OTP xem có hợp lệ hoặc hết hạn chưa
+        if (!cachedData) {
+            return res.status(400).json({ error: 'Không tìm thấy yêu cầu đổi mật khẩu hoặc mã đã hết hạn!' });
+        }
+        if (Date.now() > cachedData.expires) {
+            delete otpCache[normalizedEmail]; // Xóa mã hết hạn
+            return res.status(400).json({ error: 'Mã OTP đã hết hạn 5 phút, vui lòng lấy mã mới!' });
+        }
+        if (cachedData.otp !== String(otp).trim()) {
+            return res.status(400).json({ error: 'Mã OTP nhập vào không chính xác!' });
+        }
+
+        // 2. Tiến hành mã hóa mật khẩu mới và lưu vào DB
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(String(newPassword), salt);
+
+        await User.findOneAndUpdate(
+            { Email: normalizedEmail },
+            { $set: { PasswordHash: passwordHash } }
+        );
+
+        // 3. Đổi mật khẩu thành công -> Xóa mã OTP khỏi bộ nhớ tạm
+        delete otpCache[normalizedEmail];
+
+        return res.status(200).json({ message: 'Đổi mật khẩu thành công! Vui lòng đăng nhập lại.' });
+
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+}
+
 module.exports = {
     registerUser,
     loginUser,
-    logoutUser
+    logoutUser,
+    forgotPassword,
+    resetPassword
 };

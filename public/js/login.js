@@ -53,3 +53,81 @@ async function handleLogin(event) {
         showToast('Không thể kết nối đến máy chủ!');
     }
 }
+
+// Hàm đóng/mở chuyển đổi giữa Form Đăng nhập và Form Quên mật khẩu
+function toggleForgotPasswordForm(showForgot) {
+    const loginArea = document.getElementById('login-form-area');
+    const forgotArea = document.getElementById('forgot-form-area');
+    
+    if (showForgot) {
+        loginArea.classList.add('hidden');
+        forgotArea.classList.remove('hidden');
+    } else {
+        loginArea.classList.remove('hidden');
+        forgotArea.classList.add('hidden');
+        // Reset lại các ô nhập liệu về trạng thái ban đầu
+        document.getElementById('otp-email-subzone').classList.remove('hidden');
+        document.getElementById('otp-verify-subzone').classList.add('hidden');
+    }
+}
+
+// BƯỚC 1: Gửi email yêu cầu cấp mã OTP
+async function requestOtpCode(event) {
+    event.preventDefault();
+    const email = document.getElementById('forgot-email').value;
+
+    try {
+        const response = await fetch('/api/auth/forgot-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.error || 'Lỗi gửi yêu cầu.');
+        } else {
+            alert(result.message);
+            // Ẩn ô nhập email đi, mở phân vùng bắt nhập mã OTP và mật khẩu mới lên
+            document.getElementById('otp-email-subzone').classList.add('hidden');
+            document.getElementById('otp-verify-subzone').classList.remove('hidden');
+        }
+    } catch (error) {
+        alert('Không thể kết nối đến máy chủ.');
+    }
+}
+
+// BƯỚC 2: Gửi OTP kèm mật khẩu mới lên để cập nhật
+async function executeResetPassword(event) {
+    event.preventDefault();
+    const email = document.getElementById('forgot-email').value;
+    const otp = document.getElementById('forgot-otp').value;
+    const newPassword = document.getElementById('forgot-new-password').value;
+    const confirmPassword = document.getElementById('forgot-confirm-password').value;
+
+    if (newPassword !== confirmPassword) {
+        alert('Mật khẩu xác nhận không khớp nhau!');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/auth/reset-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, otp, newPassword })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.error || 'Lỗi cập nhật mật khẩu.');
+        } else {
+            alert(result.message);
+            // Thành công -> Đưa người dùng về lại form đăng nhập sạch sẽ
+            toggleForgotPasswordForm(false);
+        }
+    } catch (error) {
+        alert('Không thể kết nối đến máy chủ.');
+    }
+}
