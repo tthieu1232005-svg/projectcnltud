@@ -119,10 +119,15 @@ app.get('/host/payments', (req, res) => {
     res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
 
-/// --- Admin: (Giao diện) ---
+// --- Luồng Admin ---
 app.get('/admin/dashboard', (req, res) => {
-    // Truyền thêm file admin-main.js vào layout
     res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
+app.get('/admin/users', (req, res) => {
+    res.render('admin/users', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
+app.get('/admin/hosts', (req, res) => {
+    res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
 
 // ==========================================
