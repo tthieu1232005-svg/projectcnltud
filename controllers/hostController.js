@@ -11,7 +11,7 @@ function sendServerError(res, error) {
 
 async function getHostProfile(req, res) {
   try {
-    const { hostId } = req.params;
+    const hostId = req.user.id || req.user._id || req.user.userId;
     if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
     const profile = await HostProfile.findOne({
@@ -27,7 +27,7 @@ async function getHostProfile(req, res) {
 
 async function updateHostProfile(req, res) {
   try {
-    const { hostId } = req.params;
+    const hostId = req.user.id || req.user._id || req.user.userId;
     if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
 
     const update = req.body;
@@ -42,11 +42,12 @@ async function updateHostProfile(req, res) {
     return sendServerError(res, error);
   }
 }
-
+// ==========================================
+// TỐI ƯU HÓA: LẤY DANH SÁCH CHI NHÁNH & KHÔNG GIAN
+// ==========================================
 async function getHostBranches(req, res) {
   try {
-    const { hostId } = req.params;
-    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
+    const hostId = req.user.id || req.user._id || req.user.userId; 
 
     const branches = await Branch.find({
       $or: [{ HostID: hostId }, { hostID: hostId }]
@@ -58,10 +59,14 @@ async function getHostBranches(req, res) {
   }
 }
 
+// ==========================================
+// TỐI ƯU HÓA: LẤY DANH SÁCH KHÔNG GIAN THEO HOST
+// ==========================================
 async function getHostSpaces(req, res) {
   try {
-    const { hostId } = req.params;
-    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
+    // THAY DÒNG CŨ: const { hostId } = req.params;
+    // BẰNG DÒNG MỚI BẢO MẬT:
+    const hostId = req.user.id || req.user._id || req.user.userId; 
 
     const branches = await Branch.find({
       $or: [{ HostID: hostId }, { hostID: hostId }]
@@ -77,56 +82,35 @@ async function getHostSpaces(req, res) {
     return sendServerError(res, error);
   }
 }
-
 // ==========================================
 // TỐI ƯU HÓA: LẤY DANH SÁCH ĐƠN ĐẶT CHỖ
 // ==========================================
 async function getHostBookings(req, res) {
   try {
-    const { hostId } = req.params;
-      
-       // 1. CHÈN ĐOẠN MÁY HÚT BỤI NÀY VÀO ĐÂY: TỰ ĐỘNG CHỐT ĐƠN HẾT GIỜ
-       const currentTime = new Date();
-       await Booking.updateMany(
-         { 
-           $or: [{ Status: 'in-use' }, { status: 'in-use' }],
-           $or: [{ EndTime: { $lt: currentTime } }, { endTime: { $lt: currentTime } }]
-         },
-         { 
-           $set: { Status: 'completed', status: 'completed' } 
-         },
-         { strict: false }
-       );
-   
-    if (!hostId) return res.status(400).json({ error: 'Thiếu hostId.' });
-
-    // Dùng thẳng HostID để tìm Booking (Nhanh gấp 3 lần code cũ)
+    // Tự động chốt đơn hết giờ
+    const currentTime = new Date();
+    await Booking.updateMany(
+      { 
+        $or: [{ Status: 'in-use' }, { status: 'in-use' }],
+        $or: [{ EndTime: { $lt: currentTime } }, { endTime: { $lt: currentTime } }]
+      },
+      { $set: { Status: 'completed', status: 'completed' } },
+      { strict: false }
+    );
+    const hostId = req.user.id || req.user._id || req.user.userId; 
     const bookings = await Booking.find({
       $or: [{ HostID: hostId }, { hostID: hostId }]
     })
-        .populate({ path: 'CustomerID', select: 'email Email FullName', strictPopulate: false })
-      .populate({
-        path: 'SpaceID',
-        // Space schema hiện tại dùng: SpaceCode + Name (viết hoa)
-        // Thêm nhiều biến thể để tương thích dữ liệu cũ
-        select: 'Name Name name SpaceName spaceName SpaceCode Space_Code space_code Space_code SpaceCode_code code spaceCode spaceCode',
-        populate: { path: 'BranchID', select: 'Name name' } // POPULATE THÊM CHI NHÁNH
-      })
-      .sort({ createdAt: -1 })
-      .lean();
-
-      
-    // DEBUG TEMP: kiểm tra SpaceID có populate đúng SpaceCode hay không
-    if (Array.isArray(bookings) && bookings.length > 0) {
-      console.log('[DEBUG] hostBookings sample SpaceID:', {
-        space: bookings[0].SpaceID,
-        spaceCode: bookings[0]?.SpaceID?.SpaceCode,
-        name: bookings[0]?.SpaceID?.Name
-      });
-    }
+    .populate({ path: 'CustomerID', select: 'email Email FullName', strictPopulate: false })
+    .populate({
+      path: 'SpaceID',
+      select: 'Name Name name SpaceName spaceName SpaceCode Space_Code space_code Space_code SpaceCode_code code spaceCode spaceCode',
+      populate: { path: 'BranchID', select: 'Name name' }
+    })
+    .sort({ createdAt: -1 })
+    .lean();
 
     return res.json({ bookings });
-
   } catch (error) {
     return sendServerError(res, error);
   }

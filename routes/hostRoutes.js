@@ -1,6 +1,6 @@
 const express = require('express');
 
-// Import các hàm từ Controller (Bao gồm 2 hàm mới)
+// Import đúng và đầy đủ các hàm từ Controller của riêng BẠN
 const { 
   getHostProfile, 
   updateHostProfile, 
@@ -17,36 +17,35 @@ const { verifyToken, authorizeRole } = require('../middleware/auth');
 
 const router = express.Router();
 
-// ==========================================
-// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ ROUTE
-// ==========================================
-// Dùng router.use() để áp dụng middleware cho tất cả các đường dẫn bên dưới.
+// ====================================================================
+// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ FILE REST API BÊN DƯỚI
 // Yêu cầu: Phải có Token hợp lệ VÀ người dùng phải có role là 'host'
+// Dữ liệu giải mã từ Token sẽ được tự động nhét vào biến req.user
+// ====================================================================
 router.use(verifyToken, authorizeRole('host'));
 
 
-// ==========================================
-// CÁC API LẤY & CẬP NHẬT THÔNG TIN
-// ==========================================
-router.get('/:hostId/bookings', getHostBookings);
-router.get('/:hostId/profile', getHostProfile);
-router.put('/:hostId/profile', updateHostProfile);
-router.get('/:hostId/branches', getHostBranches);
-router.get('/:hostId/spaces', getHostSpaces);
+// ====================================================================
+// CÁC API LẤY & CẬP NHẬT THÔNG TIN (ĐÃ KHỬ SẠCH /:hostId DƯ THỪA)
+// ====================================================================
+router.get('/bookings', getHostBookings);
+router.get('/branches', getHostBranches);
+router.get('/spaces', getHostSpaces);
+
+router.get('/profile', getHostProfile);
+router.put('/profile', updateHostProfile);
 
 
-
-
-// ==========================================
-// CÁC API HÀNH ĐỘNG (THAO TÁC VỚI ĐƠN HÀNG)
-// ==========================================
+// ====================================================================
+// CÁC API HÀNH ĐỘNG (THAO TÁC VỚI ĐƠN HÀNG CỦA BẠN - ĐÃ BỎ /:hostId)
+// ====================================================================
 // Host xác nhận đơn (Chuyển sang confirmed + Tạo Payment)
-router.put('/:hostId/bookings/:bookingId/confirm', confirmBooking);
+router.put('/bookings/:bookingId/confirm', confirmBooking);
 
 // Host từ chối đơn (Chuyển sang cancelled)
-router.put('/:hostId/bookings/:bookingId/cancel', cancelBooking);
+router.put('/bookings/:bookingId/cancel', cancelBooking);
 
 // Host check-in đơn (Chuyển sang in-use)
-router.put('/:hostId/bookings/:bookingId/checkin', checkinBooking);
+router.put('/bookings/:bookingId/checkin', checkinBooking);
 
 module.exports = router;

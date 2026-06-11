@@ -357,7 +357,9 @@ function backToLayer2() {
 // =======================================================
 
 let allBookingsCache = []; 
-
+// ==========================================
+// TỐI ƯU HÓA: LẤY DANH SÁCH CƠ SỞ & KHÔNG GIAN
+// ==========================================
 async function loadHostBookings() {
     const tableBody = document.getElementById('host-booking-table-body');
     const emptyState = document.getElementById('booking-empty-state');
@@ -372,11 +374,11 @@ async function loadHostBookings() {
     }
 
     try {
-        const response = await fetch(`/api/hosts/${hostId}/bookings`, {
-            method: 'GET',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
+        const response = await fetch(`/api/hosts/bookings`, {
+        method: 'GET',
+        headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
             }
         });
 
@@ -756,7 +758,7 @@ async function executeBookingAction(bookingId, action) {
     const token = localStorage.getItem('token');
 
     try {
-        const response = await fetch(`/api/hosts/${hostId}/bookings/${bookingId}/${action}`, {
+        const response = await fetch(`/api/hosts/bookings/${bookingId}/${action}`, { // XÓA BỎ phần ${hostId}
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,
