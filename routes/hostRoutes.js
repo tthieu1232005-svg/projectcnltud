@@ -15,7 +15,7 @@ router.get('/dashboard', hostController.renderDashboardView);
 router.get('/profile', (req, res) => {
   res.render('host/profile', {
     success: false,
-    scripts: '<script src="/js/host-spaces.js"></script>'
+    scripts: '<script src="/js/host-profile.js"></script>'
   });
 });
 

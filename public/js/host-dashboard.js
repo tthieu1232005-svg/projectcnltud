@@ -1,5 +1,5 @@
 let currentSelectedBranch = 'all';
-let myChart = null;
+let myChart = null; // Dùng 1 biến duy nhất quản lý Chart
 
 document.addEventListener("DOMContentLoaded", function () {
     loadDashboardData('all');
@@ -41,25 +41,9 @@ async function loadDashboardData(branchId) {
             });
         }
 
-        // 3. Khởi tạo Biểu đồ an toàn
-        if (typeof Chart !== 'undefined') {
-            if (myChart) myChart.destroy();
-            const ctx = document.getElementById('bookingChart').getContext('2d');
-            myChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: ['7 ngày trước', '6', '5', '4', '3', '2', 'Hôm nay'],
-                    datasets: [{
-                        label: 'Số lượng đặt chỗ',
-                        data: result.chartData || [0, 0, 0, 0, 0, 0, 0],
-                        borderColor: '#4f46e5',
-                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
-            });
+        // 3. Khởi tạo Biểu đồ với dữ liệu thực tế từ Backend
+        if (typeof Chart !== 'undefined' && result.chartData) {
+            renderChart(result.chartData);
         }
 
         // 4. Render Sơ đồ phòng
@@ -77,7 +61,6 @@ async function loadDashboardData(branchId) {
                     </div>`;
             });
         }
-        // ... (Sau đoạn code render floor plan hiện tại)
 
         // 5. Render Danh sách Booking gần nhất
         const tableBody = document.getElementById('host-recent-table');
@@ -116,6 +99,69 @@ async function loadDashboardData(branchId) {
     } catch (err) {
         console.error("Lỗi:", err);
     }
+}
+
+// Hàm renderChart tách riêng cho sạch code
+function renderChart(chartData) {
+    const ctx = document.getElementById('bookingChart').getContext('2d');
+
+    // Hủy biểu đồ cũ nếu đã vẽ trước đó (khi switch chi nhánh)
+    if (myChart) {
+        myChart.destroy();
+    }
+
+    myChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [{
+                label: 'Số lượt đặt chỗ',
+                data: chartData.bookings,
+                borderColor: '#0d9488',
+                backgroundColor: 'rgba(13, 148, 136, 0.1)',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4,
+                pointBackgroundColor: '#0d9488',
+                pointBorderColor: '#ffffff',
+                pointBorderWidth: 2,
+                pointRadius: 5
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: '#1e293b',
+                    padding: 12,
+                    titleFont: { size: 13 },
+                    bodyFont: { size: 14, weight: 'bold' },
+                    displayColors: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        stepSize: 1,
+                        color: '#94a3b8'
+                    },
+                    grid: {
+                        color: '#f1f5f9',
+                        drawBorder: false
+                    }
+                },
+                x: {
+                    ticks: { color: '#94a3b8', font: { weight: 'bold' } },
+                    grid: { display: false }
+                }
+            }
+        }
+    });
 }
 
 // Hàm switchBranch cải tiến
