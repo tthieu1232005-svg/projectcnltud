@@ -74,7 +74,6 @@ const branchSchema = new mongoose.Schema({
         enum: ['active', 'inactive', 'maintenance'],
         default: 'active',
         index: true
-        
     }
 
 }, {

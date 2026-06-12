@@ -29,10 +29,9 @@ async function handleLogin(event) {
             // LƯU TOKEN VÀ THÔNG TIN VÀO LOCALSTORAGE
             localStorage.setItem('token', data.token); // Cất giấy thông hành
             localStorage.setItem('userRole', data.user.role); // Nhớ vai trò để render UI sau này
-            localStorage.setItem('user', JSON.stringify(data.user)); // Lưu cả object user để sau này có thể lấy tên hiển thị, v.v.
             localStorage.setItem('userName', data.user.fullName); // Lưu tên để hiển thị trên UI
-            localStorage.setItem('userId', data.user.id); // Lưu tên để hiển thị trên UI
-
+            localStorage.setItem('userId', data.user.id); // LƯU LẠI ID DỰ PHÒNG CHỐNG LỖI UI CŨ
+            
             // ĐIỀU HƯỚNG DỰA TRÊN VAI TRÒ (ROLE-BASED ROUTING)
             setTimeout(() => {
                 if (data.user.role === 'host') {

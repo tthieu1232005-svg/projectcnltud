@@ -42,6 +42,7 @@ async function updateHostProfile(req, res) {
     return sendServerError(res, error);
   }
 }
+
 // ==========================================
 // TỐI ƯU HÓA: LẤY DANH SÁCH CHI NHÁNH & KHÔNG GIAN
 // ==========================================
@@ -64,8 +65,6 @@ async function getHostBranches(req, res) {
 // ==========================================
 async function getHostSpaces(req, res) {
   try {
-    // THAY DÒNG CŨ: const { hostId } = req.params;
-    // BẰNG DÒNG MỚI BẢO MẬT:
     const hostId = req.user.id || req.user._id || req.user.userId; 
 
     const branches = await Branch.find({
@@ -82,6 +81,7 @@ async function getHostSpaces(req, res) {
     return sendServerError(res, error);
   }
 }
+
 // ==========================================
 // TỐI ƯU HÓA: LẤY DANH SÁCH ĐƠN ĐẶT CHỖ
 // ==========================================
@@ -97,6 +97,7 @@ async function getHostBookings(req, res) {
       { $set: { Status: 'completed', status: 'completed' } },
       { strict: false }
     );
+
     const hostId = req.user.id || req.user._id || req.user.userId; 
     const bookings = await Booking.find({
       $or: [{ HostID: hostId }, { hostID: hostId }]
@@ -233,7 +234,6 @@ async function checkinBooking(req, res) {
     return res.status(500).json({ error: `Chi tiết lỗi Server: ${error.message}` });
   }
 }
-
 
 async function cancelBooking(req, res) {
   try {

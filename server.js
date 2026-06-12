@@ -17,104 +17,92 @@ const server = http.createServer(app);
 const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-// Khai báo io là biến toàn cục để các Controller khác có thể lấy ra dùng
-global.io = io;
+// ==========================================
+// CẤU HÌNH SOCKET.IO (CỦA HEAD)
+// ==========================================
+global.io = io; // Khai báo io toàn cục để các Controller dùng
 
-// Lắng nghe kết nối từ trình duyệt
 io.on('connection', (socket) => {
     console.log('Một thiết bị vừa kết nối:', socket.id);
-
     socket.on('disconnect', () => {
         console.log('Thiết bị đã ngắt kết nối:', socket.id);
     });
 });
 
-// --- Middleware xử lý dữ liệu ---
+// ==========================================
+// MIDDLEWARE XỬ LÝ DỮ LIỆU & GIAO DIỆN
+// ==========================================
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-
-// Cấp quyền cho phép trình duyệt đọc các file tĩnh (như css, js, hình ảnh)
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Cấu hình View Engine
+app.use(expressLayouts);
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+app.set('layout', 'layout');
+
+// Set default locals (KẾT HỢP HEAD & NA)
+app.use((req, res, next) => {
+    res.locals.req = req;       // Cấp quyền cho EJS đọc req (Của HEAD)
+    res.locals.branches = [];   // Tránh lỗi undefined khi render (Của NA)
+    res.locals.keyword = "";    // Tránh lỗi undefined khi render (Của NA)
+    next();
+});
+
 // ==========================================
-// KHAI BÁO CÁC API ROUTES (Xử lý dữ liệu ngầm)
+// KHAI BÁO CÁC API ROUTES (Trả dữ liệu JSON)
 // ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/hosts', hostRoutes);
 app.use('/api/admin', adminRoutes);
 
-// ==========================================
-// CẤU HÌNH VIEW ENGINE (Render Giao diện EJS)
-// ==========================================
-app.use(expressLayouts);
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-app.set('layout', 'layout');
 
 // ==========================================
-// KHAI BÁO CÁC WEB ROUTES (Điều hướng trang)
+// KHAI BÁO CÁC WEB ROUTES (Render Giao diện EJS)
 // ==========================================
 
-// --- Luồng Khách hàng (Customer) ---
-app.get('/', (req, res) => {
-    res.render('customer/home', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-app.get('/search', (req, res) => {
-    res.render('customer/search', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-app.get('/detail', (req, res) => {
-    res.render('customer/detail', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-app.get('/payment', (req, res) => {
-    res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-app.get('/history', (req, res) => {
-    res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-app.get('/payment_history', (req, res) => {
-    res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-app.get('/profile', (req, res) => {
-    res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-// --- Luồng Dùng chung (Đăng nhập / Đăng ký) ---
+// --- Luồng Đăng nhập / Đăng ký ---
 app.get('/login', (req, res) => {
     res.render('customer/login');
 });
-
 app.get('/register', (req, res) => {
     res.render('customer/register');
+});
+
+// --- Luồng Khách hàng (Customer) ---
+
+// Các trang lịch sử & thanh toán giữ nguyên (Đề phòng Na chưa chuyển sang file Router)
+app.get('/payment', (req, res) => {
+    res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
+app.get('/history', (req, res) => {
+    res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
+app.get('/payment_history', (req, res) => {
+    res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
+app.get('/profile', (req, res) => {
+    res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
 
 // --- Luồng Chủ cơ sở (Host) ---
 app.get('/host/profile', (req, res) => {
     res.render('host/profile', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
-
 app.get('/host/dashboard', (req, res) => {
     res.render('host/dashboard', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
-
 app.get('/host/spaces', (req, res) => {
     res.render('host/spaces', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
-
 app.get('/host/bookings', (req, res) => {
     res.render('host/bookings', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
-
 app.get('/host/reports', (req, res) => {
     res.render('host/reports', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
-
 app.get('/host/payments', (req, res) => {
     res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
@@ -130,6 +118,10 @@ app.get('/admin/hosts', (req, res) => {
     res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
 
+// --- Các trang khác ---
+
+
+app.use('/', customerRoutes);
 // ==========================================
 // MIDDLEWARE XỬ LÝ LỖI TỔNG
 // ==========================================
@@ -147,7 +139,7 @@ app.use((err, req, res, next) => {
 connectDB()
     .then(() => {
         console.log('✅ MongoDB connected, starting server...');
-        // CHÚ Ý CHỖ NÀY: Dùng server.listen, TUYỆT ĐỐI KHÔNG DÙNG app.listen
+        // CHÚ Ý CHỖ NÀY: Bắt buộc dùng server.listen (của HEAD) để chạy được Socket.IO
         server.listen(PORT, () => {
             console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
             console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
@@ -157,3 +149,5 @@ connectDB()
         console.error('❌ Không thể kết nối MongoDB, server không khởi động:', err);
         process.exit(1);
     });
+
+module.exports = app;

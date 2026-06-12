@@ -347,16 +347,12 @@ function backToLayer2() {
     showHostSpaceLayer('space-mgr-layer-2');
 }
 
-
-// =======================================================
-// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
-// =======================================================
-
 // =======================================================
 // LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
 // =======================================================
 
 let allBookingsCache = []; 
+
 // ==========================================
 // TỐI ƯU HÓA: LẤY DANH SÁCH CƠ SỞ & KHÔNG GIAN
 // ==========================================
@@ -754,11 +750,10 @@ function startLiveTimers() {
 async function executeBookingAction(bookingId, action) {
     if (action !== 'checkin' && !confirm(`Bạn có chắc chắn muốn thực hiện hành động này không?`)) return;
 
-    const hostId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
 
     try {
-        const response = await fetch(`/api/hosts/bookings/${bookingId}/${action}`, { // XÓA BỎ phần ${hostId}
+        const response = await fetch(`/api/hosts/bookings/${bookingId}/${action}`, { 
             method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`,

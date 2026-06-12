@@ -168,8 +168,8 @@ function renderMenu(currentRole) {
         if (i.id === 'home') expectedPath = '/';
         else if (i.id.startsWith('host_')) expectedPath = '/host/' + i.id.replace('host_', '');
         else if (i.id.startsWith('admin_')) { 
-                    expectedPath = '/admin/' + i.id.replace('admin_', '');
-                }
+                expectedPath = '/admin/' + i.id.replace('admin_', '');
+        }
         if (window.location.pathname === expectedPath) {
             d.classList.add('active');
         }
@@ -190,13 +190,110 @@ function logout() {
     localStorage.removeItem('token');
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
+    localStorage.removeItem('userId'); // Dọn dẹp cả ID dự phòng
     window.location.href = '/login';
 }
 
+// Ẩn menu người dùng khi click ra ngoài (UX Của nhánh HEAD)
 document.addEventListener('click', (event) => {
     const userInfo = document.getElementById('user-info');
     const dropdown = document.getElementById('dropdown-menu');
     if (userInfo && dropdown && !userInfo.contains(event.target)) {
         dropdown.classList.add('hidden');
+    }
+});
+
+// ==========================================
+// XỬ LÝ SỰ KIỆN ĐỔI MẬT KHẨU (GỬI API LÊN BACKEND - Của nhánh Na)
+// ==========================================
+document.addEventListener('DOMContentLoaded', () => {
+    // 1. Tìm nút "THAY ĐỔI MẬT KHẨU"
+    const changePasswordBtn = Array.from(document.querySelectorAll('button, a, div'))
+        .find(el => el.textContent.trim() === 'THAY ĐỔI MẬT KHẨU');
+
+    if (changePasswordBtn) {
+        changePasswordBtn.classList.add('cursor-pointer');
+
+        changePasswordBtn.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            // 2. Trỏ tới các ô nhập (Tìm dựa theo loại input password)
+            const inputs = document.querySelectorAll('input[type="password"]');
+
+            const oldPasswordInput = inputs[0];
+            const newPasswordInput = inputs[1];
+            const confirmPasswordInput = inputs[2];
+
+            if (!oldPasswordInput || !newPasswordInput || !confirmPasswordInput) {
+                alert('Không tìm thấy các ô nhập mật khẩu trên giao diện!');
+                return;
+            }
+
+            const oldPassword = oldPasswordInput.value.trim();
+            const newPassword = newPasswordInput.value.trim();
+            const confirmPassword = confirmPasswordInput.value.trim();
+
+            // 3. Validate dữ liệu nhanh ở Frontend
+            if (!oldPassword || !newPassword || !confirmPassword) {
+                alert('Vui lòng điền đầy đủ cả 3 ô mật khẩu!');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                alert('Mật khẩu mới và Xác nhận mật khẩu mới không trùng khớp với nhau!');
+                return;
+            }
+
+            if (newPassword.length < 6) {
+                alert('Mật khẩu mới phải có độ dài từ 6 ký tự trở lên!');
+                return;
+            }
+
+            try {
+                changePasswordBtn.innerText = 'ĐANG XỬ LÝ...';
+                changePasswordBtn.style.pointerEvents = 'none';
+
+                // 4. Lấy token
+                const token = localStorage.getItem('token');
+
+                // 5. Gửi request Fetch (ĐÃ SỬA ĐƯỜNG LINK THÀNH /api/auth/...)
+                const response = await fetch('/api/auth/change-password', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({
+                        oldPassword: oldPassword,
+                        newPassword: newPassword
+                    })
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    if (typeof showToast === 'function') {
+                        showToast('Cập nhật mật khẩu thành công!');
+                    } else {
+                        alert('Cập nhật mật khẩu thành công!');
+                    }
+
+                    // Xóa sạch dữ liệu cũ
+                    oldPasswordInput.value = '';
+                    newPasswordInput.value = '';
+                    confirmPasswordInput.value = '';
+
+                } else {
+                    alert(result.error || 'Đổi mật khẩu thất bại, vui lòng thử lại!');
+                }
+
+            } catch (error) {
+                console.error('Lỗi khi gọi API đổi mật khẩu:', error);
+                alert('Có lỗi kết nối hệ thống, vui lòng thử lại sau!');
+            } finally {
+                changePasswordBtn.innerText = 'THAY ĐỔI MẬT KHẨU';
+                changePasswordBtn.style.pointerEvents = 'auto';
+            }
+        });
     }
 });
