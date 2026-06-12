@@ -1,4 +1,5 @@
 let currentSelectedBranch = 'all';
+let myChart = null;
 
 document.addEventListener("DOMContentLoaded", function () {
     loadDashboardData('all');
@@ -18,97 +19,111 @@ async function loadDashboardData(branchId) {
         });
 
         const result = await response.json();
-        if (!response.ok) {
-            console.error(result.error);
-            return;
-        }
+        if (!response.ok) throw new Error(result.error || "Lỗi tải dữ liệu");
 
-        // 1. Cập nhật các ô số liệu Tổng quan
+        // 1. Cập nhật số liệu
         document.getElementById('stat-revenue').innerText = result.stats.revenue.toLocaleString('vi-VN') + 'đ';
         document.getElementById('stat-bookings').innerText = result.stats.totalBookings;
         document.getElementById('stat-occupied').innerText = result.stats.totalOccupiedGuests;
         document.getElementById('stat-rooms').innerText = result.stats.activeRoomsCount;
-        document.getElementById('finance-paid').innerText = result.stats.paidAmount.toLocaleString('vi-VN') + 'đ';
-        document.getElementById('finance-pending').innerText = result.stats.pendingAmount.toLocaleString('vi-VN') + 'đ';
+        document.getElementById('finance-paid').innerText = result.stats.revenue.toLocaleString('vi-VN') + 'đ';
+        document.getElementById('finance-pending').innerText = result.stats.paidAmount.toLocaleString('vi-VN') + 'đ';
 
+        // 2. Render Tabs Chi nhánh (Chỉ chạy khi ở tab Tất cả)
         if (branchId === 'all' && result.branches) {
             const tabContainer = document.getElementById('branch-tabs-container');
-            tabContainer.innerHTML = `<button type="button" class="branch-tab px-5 py-2.5 rounded-xl text-sm font-bold transition ${currentSelectedBranch === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600'}" onclick="switchBranch('all')">Tất cả</button>`;
-
+            tabContainer.innerHTML = `<button type="button" data-id="all" class="branch-tab px-5 py-2.5 rounded-xl text-sm font-bold transition ${currentSelectedBranch === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600'}" onclick="switchBranch('all')">Tất cả</button>`;
             result.branches.forEach(b => {
                 tabContainer.innerHTML += `
-                        <button type="button" class="branch-tab px-5 py-2.5 rounded-xl text-sm font-bold transition ${currentSelectedBranch === b._id ? 'bg-indigo-600 text-white' : 'text-slate-600'}" onclick="switchBranch('${b._id}')">
-                            ${b.Name}
-                        </button>
-                    `;
+                    <button type="button" data-id="${b._id}" class="branch-tab px-5 py-2.5 rounded-xl text-sm font-bold transition ${currentSelectedBranch === b._id ? 'bg-indigo-600 text-white' : 'text-slate-600'}" onclick="switchBranch('${b._id}')">
+                        ${b.Name}
+                    </button>`;
             });
         }
 
-        // 2. Render Sơ đồ Trạng thái phòng Live
+        // 3. Khởi tạo Biểu đồ an toàn
+        if (typeof Chart !== 'undefined') {
+            if (myChart) myChart.destroy();
+            const ctx = document.getElementById('bookingChart').getContext('2d');
+            myChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['7 ngày trước', '6', '5', '4', '3', '2', 'Hôm nay'],
+                    datasets: [{
+                        label: 'Số lượng đặt chỗ',
+                        data: result.chartData || [0, 0, 0, 0, 0, 0, 0],
+                        borderColor: '#4f46e5',
+                        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+        }
+
+        // 4. Render Sơ đồ phòng
         const floorPlanContainer = document.getElementById('host-floor-plan-mini');
         floorPlanContainer.innerHTML = '';
-        if (result.liveFloorPlan && result.liveFloorPlan.length > 0) {
+        if (result.liveFloorPlan?.length > 0) {
             result.liveFloorPlan.forEach(space => {
-                let colorClass = 'bg-emerald-100 border-emerald-200 text-emerald-800'; // Trống
-                if (space.LiveStatus === 'occupied') colorClass = 'bg-rose-100 border-rose-200 text-rose-800'; // Đang dùng
-                if (space.LiveStatus === 'upcoming') colorClass = 'bg-amber-100 border-amber-200 text-amber-800'; // Sắp có khách
-                if (space.LiveStatus === 'maintenance') colorClass = 'bg-slate-200 border-slate-300 text-slate-500'; // Bảo trì
+                let colorClass = 'bg-emerald-100 border-emerald-200 text-emerald-800';
+                if (space.LiveStatus === 'occupied') colorClass = 'bg-rose-100 border-rose-200 text-rose-800';
+                else if (space.LiveStatus === 'maintenance') colorClass = 'bg-slate-200 border-slate-300 text-slate-500';
 
                 floorPlanContainer.innerHTML += `
-                        <div class="aspect-square min-h-[2.25rem] rounded-lg flex items-center justify-center text-[10px] font-bold border ${colorClass}">
-                            ${space.SpaceCode}
-                        </div>
-                    `;
+                    <div class="aspect-square min-h-[2.25rem] rounded-lg flex items-center justify-center text-[10px] font-bold border ${colorClass}">
+                        ${space.SpaceCode}
+                    </div>`;
             });
-        } else {
-            floorPlanContainer.innerHTML = '<p class="text-xs text-slate-400 col-span-4">Không có phòng</p>';
         }
+        // ... (Sau đoạn code render floor plan hiện tại)
 
-        // 3. Render Bảng Booking gần nhất
+        // 5. Render Danh sách Booking gần nhất
         const tableBody = document.getElementById('host-recent-table');
-        tableBody.innerHTML = '';
-        if (result.recentBookings && result.recentBookings.length > 0) {
-            result.recentBookings.forEach(b => {
-                const customerName = b.CustomerID ? (b.CustomerID.FullName || b.CustomerID.fullName || 'Khách vãng lai') : 'N/A';
-                const spaceCode = b.SpaceID ? b.SpaceID.SpaceCode : 'N/A';
-                const startTime = new Date(b.StartTime).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' });
+        if (tableBody) {
+            tableBody.innerHTML = ''; // Xóa dữ liệu cũ
 
-                let statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-gray-100 text-gray-600">${b.Status}</span>`;
-                if (b.Status === 'confirmed') statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-blue-100 text-blue-700">Đã xác nhận</span>`;
-                if (b.Status === 'completed') statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-100 text-emerald-700">Hoàn thành</span>`;
-                if (b.Status === 'cancelled') statusBadge = `<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-red-100 text-red-700">Đã hủy</span>`;
+            if (result.recentBookings && result.recentBookings.length > 0) {
+                result.recentBookings.forEach(booking => {
+                    const customerName = booking.CustomerID?.FullName || booking.CustomerID?.fullName || 'Khách vãng lai';
+                    const spaceName = booking.SpaceID?.SpaceCode || booking.SpaceID?.name || 'N/A';
+                    const date = new Date(booking.createdAt).toLocaleDateString('vi-VN');
 
-                tableBody.innerHTML += `
-                        <tr class="border-b border-slate-50 hover:bg-slate-50/50 transition">
-                            <td class="p-3 font-semibold text-slate-800">${customerName}</td>
-                            <td class="p-3 font-bold text-indigo-600">${spaceCode}</td>
-                            <td class="p-3 text-slate-500">${startTime}</td>
-                            <td class="p-3">${statusBadge}</td>
-                        </tr>
-                    `;
-            });
-        } else {
-            tableBody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400">Chưa có lịch đặt chỗ nào gần đây.</td></tr>`;
+                    // Mapping trạng thái
+                    const statusMap = { 'pending': 'Chờ duyệt', 'confirmed': 'Đã xác nhận', 'in-use': 'Đang sử dụng', 'completed': 'Hoàn thành' };
+                    const statusText = statusMap[booking.Status] || booking.Status;
+
+                    tableBody.innerHTML += `
+                <tr class="border-b border-slate-100 hover:bg-slate-50">
+                    <td class="p-3 font-medium text-slate-800">${customerName}</td>
+                    <td class="p-3">${spaceName}</td>
+                    <td class="p-3 text-slate-500">${date}</td>
+                    <td class="p-3">
+                        <span class="px-2 py-1 rounded-md text-[9px] font-bold uppercase ${booking.Status === 'confirmed' ? 'bg-emerald-100 text-emerald-700' :
+                            booking.Status === 'pending' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-600'
+                        }">
+                            ${statusText}
+                        </span>
+                    </td>
+                </tr>
+            `;
+                });
+            } else {
+                tableBody.innerHTML = '<tr><td colspan="4" class="p-4 text-center text-slate-400">Chưa có đơn đặt chỗ nào.</td></tr>';
+            }
         }
-
     } catch (err) {
-        console.error("Lỗi khi load dữ liệu Dashboard:", err);
+        console.error("Lỗi:", err);
     }
 }
 
-// Hàm đổi Chi nhánh khi click chọn Tab
+// Hàm switchBranch cải tiến
 function switchBranch(branchId) {
     currentSelectedBranch = branchId;
-    const tabs = document.querySelectorAll('.branch-tab');
-
-    tabs.forEach(tab => {
-        tab.classList.remove('bg-indigo-600', 'text-white');
-        tab.classList.add('text-slate-600');
-
-        if (tab.getAttribute('onclick').includes(`'${branchId}'`)) {
-            tab.classList.remove('text-slate-600');
-            tab.classList.add('bg-indigo-600', 'text-white');
-        }
+    document.querySelectorAll('.branch-tab').forEach(tab => {
+        const isActive = tab.getAttribute('data-id') === branchId;
+        tab.className = `branch-tab px-5 py-2.5 rounded-xl text-sm font-bold transition ${isActive ? 'bg-indigo-600 text-white' : 'text-slate-600'}`;
     });
     loadDashboardData(branchId);
 }

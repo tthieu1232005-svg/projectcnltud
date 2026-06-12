@@ -12,7 +12,6 @@ function sendServerError(res, error) {
   console.error(error);
   return res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại sau.' });
 }
-
 async function renderDashboardView(req, res) {
   try {
     return res.render('host/dashboard', {
@@ -32,7 +31,6 @@ async function getDashboardStatsAPI(req, res) {
     }
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'YOUR_SECRET_KEY');
-    // Lấy hostId từ token (authController.js đang lưu là userId)
     const hostId = decoded.userId || decoded.id || decoded._id;
 
     const { branchId } = req.query;
@@ -55,7 +53,6 @@ async function getDashboardStatsAPI(req, res) {
     const currentSpaces = await Space.find(spaceMatchCondition).select('_id SpaceCode Status').lean();
     const spaceIds = currentSpaces.map(s => s._id);
 
-    // Nếu không có space nào, trả về 0 hết để tránh lỗi query mảng rỗng
     if (spaceIds.length === 0) {
       return res.json({
         branches,
@@ -69,38 +66,26 @@ async function getDashboardStatsAPI(req, res) {
       $or: [{ SpaceID: { $in: spaceIds } }, { spaceID: { $in: spaceIds } }]
     };
 
-    // 3. TÍNH TOÁN DOANH THU (Tách riêng câu lệnh await ra ngoài aggregate)
-    const bookingIdsForPayment = await Booking.find(bookingMatchCondition).distinct('_id');
-
-    const paymentStats = await PaymentHistory.aggregate([
+    // 3 & 4. TÍNH TỔNG BOOKING VÀ ĐÃ THANH TOÁN (CỌC) CHỈ TỪ BẢNG BOOKING
+    const bookingStats = await Booking.aggregate([
       {
         $match: {
-          $or: [{ HostID: new mongoose.Types.ObjectId(hostId) }, { hostID: new mongoose.Types.ObjectId(hostId) }],
-          BookingID: { $in: bookingIdsForPayment },
-          Status: 'successful'
-        }
-      },
-      { $group: { _id: null, totalRevenue: { $sum: '$Amount' } } }
-    ]);
-    const revenue = paymentStats.length > 0 ? paymentStats[0].totalRevenue : 0;
-
-    // 4. TÍNH TIỀN ĐÃ NHẬN / ĐANG CHỜ
-    const financialStats = await PaymentHistory.aggregate([
-      {
-        $match: {
-          $or: [{ HostID: new mongoose.Types.ObjectId(hostId) }, { hostID: new mongoose.Types.ObjectId(hostId) }]
+          $or: [{ SpaceID: { $in: spaceIds } }, { spaceID: { $in: spaceIds } }],
+          Status: { $ne: 'cancelled' } // Đã thêm: Loại bỏ đơn hủy để tính tiền chuẩn
         }
       },
       {
         $group: {
           _id: null,
-          paidAmount: { $sum: { $cond: [{ $eq: ["$Status", "successful"] }, "$Amount", 0] } },
-          pendingAmount: { $sum: { $cond: [{ $eq: ["$Status", "pending"] }, "$Amount", 0] } }
+          totalRevenue: { $sum: "$TotalAmount" },
+          totalDeposit: { $sum: "$DepositAmount" }
         }
       }
     ]);
-    const paidAmount = financialStats.length > 0 ? financialStats[0].paidAmount : 0;
-    const pendingAmount = financialStats.length > 0 ? financialStats[0].pendingAmount : 0;
+
+    const revenue = bookingStats.length > 0 ? bookingStats[0].totalRevenue : 0;
+    const paidAmount = bookingStats.length > 0 ? bookingStats[0].totalDeposit : 0;
+    const pendingAmount = 0;
 
     // 5. THỐNG KÊ SỐ LƯỢNG BOOKING & PHÒNG
     const totalBookings = await Booking.countDocuments({ ...bookingMatchCondition, Status: { $ne: 'cancelled' } });
@@ -130,7 +115,7 @@ async function getDashboardStatsAPI(req, res) {
       if (space.Status === 'maintenance') {
         liveStatus = 'maintenance';
       } else if (bookingMatch) {
-        const actualNow = new Date(); // Lấy giờ thực tại
+        const actualNow = new Date();
         if (bookingMatch.StartTime <= actualNow && bookingMatch.EndTime >= actualNow) {
           liveStatus = 'occupied';
         } else if (bookingMatch.StartTime > actualNow) {
@@ -144,7 +129,10 @@ async function getDashboardStatsAPI(req, res) {
     });
 
     // 7. LẤY DANH SÁCH BOOKING GẦN NHẤT
-    const recentBookings = await Booking.find(bookingMatchCondition)
+    const recentBookings = await Booking.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }],
+      Status: { $ne: 'cancelled' }
+    })
       .populate('CustomerID', 'fullName FullName Email email')
       .populate('SpaceID', 'SpaceCode spaceCode Name name')
       .sort({ createdAt: -1 })
