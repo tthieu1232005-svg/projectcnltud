@@ -40,6 +40,52 @@ function validatePasswordMatch() {
 }
 
 // ==========================================
+// TỰ ĐỘNG TẢI DỮ LIỆU KHI MỞ TRANG PROFILE
+// ==========================================
+async function loadProfile() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        console.error('Không tìm thấy token xác thực. Vui lòng đăng nhập lại.');
+        return;
+    }
+
+    try {
+        // Gọi API lấy dữ liệu Hồ sơ (Khớp với router.get('/api/profile') trong hostRoutes)
+        const response = await fetch('/host/api/profile', {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Không thể tải dữ liệu hồ sơ.');
+
+        // Điền dữ liệu vào các ô input trên giao diện EJS
+        if (document.getElementById('host-name-input')) document.getElementById('host-name-input').value = data.user?.FullName || '';
+        if (document.getElementById('email')) document.getElementById('email').value = data.user?.Email || '';
+        if (document.getElementById('companyName')) document.getElementById('companyName').value = data.profile?.CompanyName || '';
+        if (document.getElementById('hotline')) document.getElementById('hotline').value = data.profile?.Hotline || '';
+        if (document.getElementById('taxCode')) document.getElementById('taxCode').value = data.profile?.TaxCode || '';
+        if (document.getElementById('bankName')) document.getElementById('bankName').value = data.profile?.BankName || '';
+        if (document.getElementById('bankNumber')) document.getElementById('bankNumber').value = data.profile?.BankNumber || '';
+
+        // Hiển thị logo thương hiệu cũ nếu có dữ liệu đường dẫn từ Cloudinary
+        if (data.profile?.Logo && document.getElementById('logo-preview')) {
+            document.getElementById('logo-preview').src = data.profile.Logo;
+        }
+
+    } catch (error) {
+        console.error('Lỗi khi tải thông tin hồ sơ:', error.message);
+    }
+}
+
+// Lắng nghe sự kiện trang tải xong để kích hoạt hàm đổ dữ liệu
+window.addEventListener('DOMContentLoaded', () => {
+    loadProfile();
+});
+
+// ==========================================
 // HÀM XỬ LÝ CHÍNH KHI BẤM NÚT LƯU HỒ SƠ
 // ==========================================
 async function updateProfile() {
@@ -56,7 +102,6 @@ async function updateProfile() {
         const oldPassword = document.getElementById('old-password').value.trim();
         const newPassword = document.getElementById('new-password').value.trim();
 
-        // Nếu người dùng có tương tác hoặc nhập vào các ô mật khẩu
         if (oldPassword || newPassword) {
             if (!oldPassword || !newPassword) {
                 alert('Vui lòng điền đầy đủ cả Mật khẩu cũ và Mật khẩu mới!');
@@ -74,15 +119,15 @@ async function updateProfile() {
                 return;
             }
 
-            // Tiến hành gọi API đổi mật khẩu riêng biệt
-            const passResponse = await fetch('/auth/change-password', {
+            // Gọi đúng API đổi mật khẩu theo cấu hình: /api/auth/change-password
+            const passResponse = await fetch('/api/auth/change-password', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${token}`
                 },
                 body: JSON.stringify({
-                    oldPassword: oldPassword, // Khớp với Backend nhận dữ liệu
+                    oldPassword: oldPassword,
                     newPassword: newPassword
                 })
             });
@@ -91,7 +136,7 @@ async function updateProfile() {
             if (!passResponse.ok) {
                 alert('Lỗi đổi mật khẩu: ' + (passResult.error || 'Thất bại'));
                 resetSubmitButton();
-                return; // Dừng lại không lưu thông tin profile nữa nếu mật khẩu sai
+                return; // Dừng tiến trình nếu mật khẩu cũ không chính xác
             }
         }
 
@@ -99,11 +144,12 @@ async function updateProfile() {
         const formElement = document.getElementById('profile-form');
         const formData = new FormData(formElement);
 
-        // Gọi API cập nhật thông tin cá nhân (Hãy kiểm tra lại đường dẫn API profile của bạn)
-        const profileResponse = await fetch('/host/update-profile', {
-            method: 'POST',
+        // Gọi đúng API PUT cập nhật thông tin: /host/api/profile
+        const profileResponse = await fetch('/host/api/profile', {
+            method: 'PUT',
             headers: {
                 'Authorization': `Bearer ${token}`
+                // Lưu ý: Không đặt Content-Type ở đây khi dùng FormData để trình duyệt tự định nghĩa biên multipart
             },
             body: formData
         });
@@ -112,16 +158,19 @@ async function updateProfile() {
 
         if (profileResponse.ok) {
             if (typeof showToast === 'function') {
-                showToast('Cập nhật hồ sơ và mật khẩu thành công!');
+                showToast('Cập nhật hồ sơ thành công!');
             } else {
                 alert('Cập nhật hồ sơ thành công!');
             }
 
-            // Ẩn lại các ô mật khẩu sau khi thành công
+            // Ẩn lại các ô mật khẩu và làm sạch dữ liệu sau khi hoàn tất thành công
             document.getElementById('password-fields').classList.add('hidden');
             document.getElementById('old-password').value = '';
             document.getElementById('new-password').value = '';
             document.getElementById('confirm-password').value = '';
+
+            // Tải lại để cập nhật chính xác ảnh hoặc thông tin mới nhất
+            loadProfile();
         } else {
             alert(profileResult.error || 'Cập nhật thông tin hồ sơ thất bại!');
         }
@@ -137,7 +186,9 @@ async function updateProfile() {
 // Hàm trả lại trạng thái cho nút bấm
 function resetSubmitButton() {
     const submitBtn = document.getElementById('submit-btn');
-    submitBtn.disabled = false;
-    submitBtn.innerText = 'LƯU THAY ĐỔI HỒ SƠ';
-    submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    if (submitBtn) {
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'LƯU THAY ĐỔI HỒ SƠ';
+        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+    }
 }

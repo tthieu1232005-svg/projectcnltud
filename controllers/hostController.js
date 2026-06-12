@@ -7,15 +7,14 @@ const jwt = require('jsonwebtoken');
 const PaymentHistory = require('../models/Payment_History');
 const mongoose = require('mongoose');
 
+// Hàm Helper
 function sendServerError(res, error) {
   console.error(error);
   return res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại sau.' });
 }
 
-
 async function renderDashboardView(req, res) {
   try {
-    // Chỉ render trang tĩnh ban đầu, dữ liệu sẽ được Javascript phía Client fetch sau qua API
     return res.render('host/dashboard', {
       scripts: '<script src="/js/host-spaces.js"></script>'
     });
@@ -25,7 +24,6 @@ async function renderDashboardView(req, res) {
   }
 }
 
-
 async function getDashboardStatsAPI(req, res) {
   try {
     const authHeader = req.headers.authorization;
@@ -34,39 +32,65 @@ async function getDashboardStatsAPI(req, res) {
     }
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'YOUR_SECRET_KEY');
-    const hostId = decoded.id || decoded._id || decoded.userId;
+    // Lấy hostId từ token (authController.js đang lưu là userId)
+    const hostId = decoded.userId || decoded.id || decoded._id;
 
-    // Lọc theo chi nhánh nếu frontend có gửi lên query ?branchId=...
     const { branchId } = req.query;
 
-    // CHUẨN HÓA ĐIỀU KIỆN LỌC (Filter)
-    let spaceMatchCondition = { HostID: new mongoose.Types.ObjectId(hostId) };
+    // 1. TÌM CHI NHÁNH CỦA HOST
+    const branches = await Branch.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    }).select('Name _id').lean();
+
+    // 2. LỌC KHÔNG GIAN (SPACES) THEO NHÁNH HOẶC TẤT CẢ
+    let spaceMatchCondition = {
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    };
     if (branchId && branchId !== 'all') {
-      spaceMatchCondition.BranchID = new mongoose.Types.ObjectId(branchId);
+      spaceMatchCondition = {
+        $or: [{ BranchID: branchId }, { branchID: branchId }]
+      };
     }
 
-    // 1. Lấy danh sách các Chi nhánh của Host này để đổ vào thẻ Tab
-    const branches = await Branch.find({ HostID: hostId }).select('Name _id').lean();
-
-    // 2. Lấy danh sách Space ID thuộc quyền quản lý của Host dựa theo bộ lọc chi nhánh
     const currentSpaces = await Space.find(spaceMatchCondition).select('_id SpaceCode Status').lean();
     const spaceIds = currentSpaces.map(s => s._id);
 
-    // Điều kiện chung cho các bảng Booking và Payment ăn theo list SpaceId
-    const bookingMatchCondition = { SpaceID: { $in: spaceIds } };
+    // Nếu không có space nào, trả về 0 hết để tránh lỗi query mảng rỗng
+    if (spaceIds.length === 0) {
+      return res.json({
+        branches,
+        stats: { revenue: 0, totalBookings: 0, totalOccupiedGuests: 0, activeRoomsCount: 0, paidAmount: 0, pendingAmount: 0 },
+        liveFloorPlan: [],
+        recentBookings: []
+      });
+    }
 
-    // --- TÍNH TOÁN 5 THẺ TỔNG QUAN ---
+    const bookingMatchCondition = {
+      $or: [{ SpaceID: { $in: spaceIds } }, { spaceID: { $in: spaceIds } }]
+    };
 
-    // Thẻ 1 & Tài chính: Doanh thu thực nhận từ bảng payment_histories (Trạng thái successful)
+    // 3. TÍNH TOÁN DOANH THU (Tách riêng câu lệnh await ra ngoài aggregate)
+    const bookingIdsForPayment = await Booking.find(bookingMatchCondition).distinct('_id');
+
     const paymentStats = await PaymentHistory.aggregate([
-      { $match: { HostID: new mongoose.Types.ObjectId(hostId), BookingID: { $in: spaceIds ? await Booking.find(bookingMatchCondition).distinct('_id') : [] }, Status: 'successful' } },
+      {
+        $match: {
+          $or: [{ HostID: new mongoose.Types.ObjectId(hostId) }, { hostID: new mongoose.Types.ObjectId(hostId) }],
+          BookingID: { $in: bookingIdsForPayment },
+          Status: 'successful'
+        }
+      },
       { $group: { _id: null, totalRevenue: { $sum: '$Amount' } } }
     ]);
     const revenue = paymentStats.length > 0 ? paymentStats[0].totalRevenue : 0;
 
-    // Tính toán thêm phần Tài chính chi tiết (Đã nhận thành công và Đang chờ xử lý)
+    // 4. TÍNH TIỀN ĐÃ NHẬN / ĐANG CHỜ
     const financialStats = await PaymentHistory.aggregate([
-      { $match: { HostID: new mongoose.Types.ObjectId(hostId) } },
+      {
+        $match: {
+          $or: [{ HostID: new mongoose.Types.ObjectId(hostId) }, { hostID: new mongoose.Types.ObjectId(hostId) }]
+        }
+      },
       {
         $group: {
           _id: null,
@@ -78,70 +102,59 @@ async function getDashboardStatsAPI(req, res) {
     const paidAmount = financialStats.length > 0 ? financialStats[0].paidAmount : 0;
     const pendingAmount = financialStats.length > 0 ? financialStats[0].pendingAmount : 0;
 
-    // Thẻ 2: Tổng số lượng Booking (Ngoại trừ các đơn bị huỷ 'cancelled')
+    // 5. THỐNG KÊ SỐ LƯỢNG BOOKING & PHÒNG
     const totalBookings = await Booking.countDocuments({ ...bookingMatchCondition, Status: { $ne: 'cancelled' } });
-
-    // Thẻ 3: Lượt khách (Tính tổng các Booking có trạng thái 'completed' - đã check-out xong)
     const totalOccupiedGuests = await Booking.countDocuments({ ...bookingMatchCondition, Status: 'completed' });
-
-    // Thẻ 4: Số chỗ hoạt động (Đếm các Space đang có status là 'available')
     const activeRoomsCount = currentSpaces.filter(s => s.Status === 'available').length;
 
+    // 6. XỬ LÝ SƠ ĐỒ PHÒNG LIVE HÔM NAY
+    const nowRealTime = new Date();
+    const startOfDay = new Date(nowRealTime.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(nowRealTime.setHours(23, 59, 59, 999));
 
-    // --- SƠ ĐỒ TRẠNG THÁI PHÒNG LIVE ---
-    // Khởi tạo trạng thái thực tế dựa theo lịch thời gian thực (Real-time) hiện tại
-    const now = new Date();
-
-    // Lấy tất cả các booking đang hoạt động hoặc sắp tới trong ngày hôm nay
     const activeBookingsToday = await Booking.find({
-      SpaceID: { $in: spaceIds },
-      Status: { $in: ['confirmed', 'pending'] },
-      StartTime: { $lte: new Date(now.setHours(23, 59, 59, 999)) },
-      EndTime: { $gte: new Date(now.setHours(0, 0, 0, 0)) }
+      $or: [{ SpaceID: { $in: spaceIds } }, { spaceID: { $in: spaceIds } }],
+      Status: { $in: ['confirmed', 'pending', 'in-use'] },
+      StartTime: { $lte: endOfDay },
+      EndTime: { $gte: startOfDay }
     }).lean();
 
-    const nowRealTime = new Date();
     const liveFloorPlan = currentSpaces.map(space => {
-      // Tìm xem phòng này có booking nào trúng khung giờ hiện tại không
-      const bookingMatch = activeBookingsToday.find(b => b.SpaceID.toString() === space._id.toString());
+      const spaceIdStr = space._id.toString();
+      const bookingMatch = activeBookingsToday.find(b => {
+        const bSpaceId = b.SpaceID || b.spaceID;
+        return bSpaceId && bSpaceId.toString() === spaceIdStr;
+      });
 
-      let liveStatus = 'available'; // Mặc định là trống (emerald)
+      let liveStatus = 'available';
       if (space.Status === 'maintenance') {
         liveStatus = 'maintenance';
       } else if (bookingMatch) {
-        if (bookingMatch.StartTime <= nowRealTime && bookingMatch.EndTime >= nowRealTime) {
-          liveStatus = 'occupied'; // Đang dùng (red)
-        } else if (bookingMatch.StartTime > nowRealTime) {
-          liveStatus = 'upcoming'; // Đã đặt, sắp tới (amber)
+        const actualNow = new Date(); // Lấy giờ thực tại
+        if (bookingMatch.StartTime <= actualNow && bookingMatch.EndTime >= actualNow) {
+          liveStatus = 'occupied';
+        } else if (bookingMatch.StartTime > actualNow) {
+          liveStatus = 'upcoming';
         }
       }
-
       return {
-        SpaceCode: space.SpaceCode,
+        SpaceCode: space.SpaceCode || space.spaceCode,
         LiveStatus: liveStatus
       };
     });
 
-
-    // --- DANH SÁCH BOOKING GẦN NHẤT (TOP 5) ---
+    // 7. LẤY DANH SÁCH BOOKING GẦN NHẤT
     const recentBookings = await Booking.find(bookingMatchCondition)
-      .populate('CustomerID', 'fullName FullName Email')
-      .populate('SpaceID', 'SpaceCode Name')
+      .populate('CustomerID', 'fullName FullName Email email')
+      .populate('SpaceID', 'SpaceCode spaceCode Name name')
       .sort({ createdAt: -1 })
       .limit(5)
       .lean();
 
-    // Trả cục dữ liệu tổng hợp về cho Frontend render
+    // 8. TRẢ VỀ JSON CHO FRONTEND
     return res.json({
       branches,
-      stats: {
-        revenue,
-        totalBookings,
-        totalOccupiedGuests,
-        activeRoomsCount,
-        paidAmount,
-        pendingAmount
-      },
+      stats: { revenue, totalBookings, totalOccupiedGuests, activeRoomsCount, paidAmount, pendingAmount },
       liveFloorPlan,
       recentBookings
     });
@@ -151,8 +164,6 @@ async function getDashboardStatsAPI(req, res) {
     return res.status(500).json({ error: 'Lỗi hệ thống khi tải số liệu thống kê!' });
   }
 }
-
-
 // ==========================================
 // 1. Hàm API lấy dữ liệu Hồ sơ (GET)
 // ==========================================
@@ -200,10 +211,9 @@ async function getProfileAPI(req, res) {
         BankNumber: profile.BankNumber || ''
       }
     });
-
-  } catch (error) {
+  } catch (error) { // ĐÃ THÊM: Sửa lỗi đóng thiếu catch
     console.error("Lỗi getProfileAPI:", error);
-    return res.status(500).json({ error: 'Lỗi hệ thống khi tải hồ sơ' });
+    return res.status(500).json({ error: 'Lỗi hệ thống khi lấy thông tin hồ sơ.' });
   }
 }
 
@@ -212,47 +222,36 @@ async function getProfileAPI(req, res) {
 // ==========================================
 async function updateProfileAPI(req, res) {
   try {
-    const authHeader = req.headers.authorization;
-    if (!authHeader) {
-      return res.status(401).json({ error: 'Không tìm thấy Token xác thực.' });
-    }
-    const token = authHeader.split(' ')[1];
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'YOUR_SECRET_KEY');
-    const hostId = decoded.id || decoded._id || decoded.userId;
+    const hostId = req.user.id || req.user._id || req.user.userId;
 
-    // 👉 ĐÃ THÊM: Hứng biến FullName từ Frontend gửi lên
-    const {
-      FullName,
-      CompanyName,
-      Hotline,
-      TaxCode,
-      BankName,
-      BankNumber
-    } = req.body;
+    const { FullName, CompanyName, Hotline, TaxCode, BankName, BankNumber } = req.body;
 
-    // 🔍 THEO DÕI 1: Kiểm tra dữ liệu Frontend gửi lên có đúng không
-    console.log("=== BẮT ĐẦU CẬP NHẬT TRANG HỒ SƠ ===");
-    console.log("-> ID Host giải mã từ Token:", hostId);
-    console.log("-> Họ tên nhận được:", FullName);
-    
-    // 👉 ĐÃ THÊM: Nếu có đổi tên thì cập nhật vào bảng User
+    // Cập nhật Tên trong bảng User
     if (FullName && FullName.trim() !== '') {
-      // Update cả 2 trường hợp tên biến để không trượt đi đâu được
       await User.findByIdAndUpdate(hostId, {
         fullName: FullName.trim(),
         FullName: FullName.trim()
       });
     }
 
+    // Chuẩn bị dữ liệu cập nhật cho HostProfile
+    let updateData = {
+      CompanyName,
+      Hotline,
+      TaxCode,
+      BankName,
+      BankNumber
+    };
+
+    // NẾU CÓ UPLOAD LOGO MỚI, lưu thêm đường dẫn ảnh
+    if (req.file && req.file.path) {
+      updateData.Logo = req.file.path; // req.file.path chứa link ảnh từ Cloudinary
+    }
+
+    // Tiến hành update
     await HostProfile.findOneAndUpdate(
       { UserID: hostId },
-      {
-        CompanyName: CompanyName,
-        Hotline: Hotline,
-        TaxCode: TaxCode,
-        BankName: BankName,
-        BankNumber: BankNumber
-      },
+      updateData,
       { new: true, upsert: true, runValidators: true }
     );
 
@@ -260,41 +259,41 @@ async function updateProfileAPI(req, res) {
       success: true,
       message: 'Đã cập nhật hồ sơ thành công!'
     });
-
   } catch (error) {
     console.error("❌ Lỗi updateProfileAPI:", error);
     return res.status(500).json({ error: 'Lỗi hệ thống khi cập nhật hồ sơ' });
   }
 }
 
-// ==========================================
-// CÁC HÀM CŨ GIỮ NGUYÊN BÊN DƯỚI
-// ==========================================
-
 async function getHostBranches(req, res) {
   try {
-    const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    const hostId = req.user.id || req.user._id || req.user.userId;
 
-    const branches = await Branch.find({ hostID: hostId }).lean();
+    const branches = await Branch.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    }).lean();
+
     return res.json({ branches });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
 
+// ==========================================
+// TỐI ƯU HÓA: LẤY DANH SÁCH KHÔNG GIAN THEO HOST
+// ==========================================
 async function getHostSpaces(req, res) {
   try {
-    const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    const hostId = req.user.id || req.user._id || req.user.userId;
 
-    const branches = await Branch.find({ hostID: hostId }).select('_id').lean();
+    const branches = await Branch.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    }).select('_id').lean();
+
     const branchIds = branches.map(branch => branch._id);
-    const spaces = await Space.find({ branchID: { $in: branchIds } }).lean();
+    const spaces = await Space.find({
+      $or: [{ BranchID: { $in: branchIds } }, { branchID: { $in: branchIds } }]
+    }).lean();
 
     return res.json({ spaces });
   } catch (error) {
@@ -302,32 +301,184 @@ async function getHostSpaces(req, res) {
   }
 }
 
+// ==========================================
+// TỐI ƯU HÓA: LẤY DANH SÁCH ĐƠN ĐẶT CHỖ
+// ==========================================
 async function getHostBookings(req, res) {
   try {
-    const { hostId } = req.params;
-    if (!hostId) {
-      return res.status(400).json({ error: 'Thiếu hostId.' });
-    }
+    const currentTime = new Date();
+    await Booking.updateMany(
+      {
+        $or: [{ Status: 'in-use' }, { status: 'in-use' }],
+        $or: [{ EndTime: { $lt: currentTime } }, { endTime: { $lt: currentTime } }]
+      },
+      { $set: { Status: 'completed', status: 'completed' } },
+      { strict: false }
+    );
+    const hostId = req.user.id || req.user._id || req.user.userId;
+    const bookings = await Booking.find({
+      $or: [{ HostID: hostId }, { hostID: hostId }]
+    })
+      .populate({ path: 'CustomerID', select: 'email Email FullName', strictPopulate: false })
+      .populate({
+        path: 'SpaceID',
+        select: 'Name Name name SpaceName spaceName SpaceCode Space_Code space_code Space_code SpaceCode_code code spaceCode spaceCode',
+        populate: { path: 'BranchID', select: 'Name name' }
+      })
+      .sort({ createdAt: -1 })
+      .lean();
 
-    const branches = await Branch.find({ hostID: hostId }).select('_id').lean();
-    const branchIds = branches.map(branch => branch._id);
-    const spaces = await Space.find({ branchID: { $in: branchIds } }).select('_id').lean();
-    const spaceIds = spaces.map(space => space._id);
-
-    const bookings = await Booking.find({ spaceID: { $in: spaceIds } }).sort({ createdAt: -1 }).lean();
     return res.json({ bookings });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
 
-// Xuất tất cả các hàm ra ngoài đồng bộ
+// ==========================================
+// CÁC HÀM HÀNH ĐỘNG CỦA HOST
+// ==========================================
+async function confirmBooking(req, res) {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    const currentStatus = booking.Status || booking.status;
+    if (currentStatus !== 'pending') {
+      return res.status(400).json({ error: 'Đơn hàng này không ở trạng thái chờ xác nhận.' });
+    }
+
+    await Booking.updateOne(
+      { _id: bookingId },
+      { $set: { Status: 'confirmed', status: 'confirmed' } }
+    );
+
+    const total = booking.TotalAmount || booking.totalAmount || 0;
+    const deposit = booking.DepositAmount || 0;
+
+    let amountReceived = deposit;
+    let paymentType = 'deposit';
+
+    if (booking.percentagePaid !== undefined) {
+      amountReceived = (total * booking.percentagePaid) / 100;
+      paymentType = booking.percentagePaid === 100 ? 'full_payment' : 'deposit';
+    } else {
+      paymentType = deposit >= total ? 'full_payment' : 'deposit';
+    }
+
+    try {
+      await PaymentHistory.create({
+        BookingID: booking._id,
+        CustomerID: booking.CustomerID || booking.customerID,
+        HostID: booking.HostID || booking.hostID,
+        TransactionCode: `TXN-CONFIRM-${Math.floor(Math.random() * 100000)}`,
+        Amount: amountReceived,
+        PaymentType: paymentType,
+        PaymentMethod: 'bank_transfer',
+        Status: 'successful'
+      });
+      console.log('✅ Đã ghi nhận lịch sử thanh toán thành công!');
+    } catch (paymentErr) {
+      console.log('⚠️ Lưu ý: Không thể ghi nhận lịch sử thanh toán:', paymentErr.message);
+    }
+
+    if (global.io) {
+      global.io.emit('booking_status_updated', {
+        bookingId: bookingId,
+        newStatus: 'confirmed'
+      });
+    }
+
+    return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+async function checkinBooking(req, res) {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    const currentStatus = booking.Status || booking.status;
+    if (currentStatus !== 'confirmed') {
+      return res.status(400).json({ error: 'Chỉ có thể nhận phòng với đơn đã được xác nhận.' });
+    }
+
+    const total = Number(booking.TotalAmount || booking.totalAmount || 0);
+
+    await Booking.updateOne(
+      { _id: bookingId },
+      {
+        $set: {
+          Status: 'in-use',
+          status: 'in-use',
+          DepositAmount: total,
+          depositAmount: total,
+          percentagePaid: 100
+        }
+      },
+      { strict: false }
+    );
+
+    if (global.io) {
+      global.io.emit('booking_status_updated', {
+        bookingId: bookingId,
+        newStatus: 'in-use'
+      });
+    }
+
+    return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận thu đủ 100% tiền!' });
+  } catch (error) {
+    console.error("LỖI CHECK-IN THỰC SỰ LÀ:", error);
+    return res.status(500).json({ error: `Chi tiết lỗi Server: ${error.message}` });
+  }
+}
+
+async function cancelBooking(req, res) {
+  try {
+    const { bookingId } = req.params;
+
+    const booking = await Booking.findById(bookingId);
+    if (!booking) return res.status(404).json({ error: 'Không tìm thấy đơn hàng.' });
+
+    const currentStatus = booking.Status || booking.status;
+
+    if (currentStatus !== 'pending' && currentStatus !== 'confirmed') {
+      return res.status(400).json({ error: 'Chỉ có thể hủy đơn đang chờ hoặc đơn đã xác nhận.' });
+    }
+
+    await Booking.updateOne(
+      { _id: bookingId },
+      { $set: { Status: 'cancelled', status: 'cancelled' } }
+    );
+
+    if (global.io) {
+      global.io.emit('booking_status_updated', {
+        bookingId: bookingId,
+        newStatus: 'cancelled'
+      });
+    }
+
+    return res.status(200).json({ message: 'Đã hủy đơn hàng thành công.' });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+// Xuất tất cả các hàm ra ngoài đồng bộ (ĐÃ BỔ SUNG CÁC HÀM CÒN THIẾU)
 module.exports = {
   getProfileAPI,
   updateProfileAPI,
   getHostBranches,
   getHostSpaces,
   getHostBookings,
-  renderDashboardView,  // <--- Thêm hàm này
-  getDashboardStatsAPI  // <--- Thêm hàm này
+  renderDashboardView,
+  getDashboardStatsAPI,
+  confirmBooking, // Đã thêm
+  checkinBooking, // Đã thêm
+  cancelBooking   // Đã thêm
 };

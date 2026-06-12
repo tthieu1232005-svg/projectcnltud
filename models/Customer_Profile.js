@@ -18,22 +18,6 @@ const customerProfileSchema = new mongoose.Schema({
         index: true // Đặt Index để Admin dễ dàng tìm kiếm khách hàng qua số điện thoại
     },
 
-    // 3. THÔNG TIN CÔNG VIỆC & NETWORKING
-    Description: {
-        type: String,
-        trim: true,
-        default: ""
-    },
-    JobTitle: {
-        type: String,
-        trim: true,
-        default: ""
-    },
-    Company: {
-        type: String,
-        trim: true,
-        default: ""
-    },
 
     // 4. THÔNG TIN TÀI CHÍNH (Phục vụ cho việc Host hoàn cọc)
     BankName: {

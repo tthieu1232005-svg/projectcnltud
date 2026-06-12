@@ -29,64 +29,60 @@ function sendServerError(res, error) {
 // ================= LOGIC ĐĂNG KÝ  =================
 async function registerUser(req, res) {
     try {
-        const { email, password, fullName, role, companyName, hotline, bankName, bankNumber } = req.body;
+        const { email, password, fullName, role, companyName, taxCode, phone, bankName, bankNumber } = req.body;
 
-        // 1. Validate Dữ liệu cơ bản
-        if (!email || !password || !fullName) {
-            return res.status(400).json({ error: 'Vui lòng nhập đầy đủ Email, Mật khẩu và Họ tên!' });
+        // 1. KIỂM TRA ĐẦU VÀO CƠ BẢN
+        if (!email || !password || !fullName || !phone || !bankName || !bankNumber) {
+            return res.status(400).json({ error: 'Vui lòng nhập đầy đủ thông tin bắt buộc!' });
         }
-        if (!isValidEmail(email)) {
-            return res.status(400).json({ error: 'Định dạng email không hợp lệ!' });
-        }
-        if (!isValidPassword(password)) {
-            return res.status(400).json({ error: 'Mật khẩu phải >= 6 ký tự, bao gồm cả chữ và số!' });
-        }
+        if (!isValidEmail(email)) return res.status(400).json({ error: 'Định dạng email không hợp lệ!' });
+        if (!isValidPassword(password)) return res.status(400).json({ error: 'Mật khẩu phải >= 6 ký tự, bao gồm cả chữ và số!' });
 
         const normalizedEmail = normalizeEmail(email);
         const normalizedRole = String(role || '').trim().toLowerCase();
-        const normalizedFullName = String(fullName).trim();
 
         if (!['customer', 'host'].includes(normalizedRole)) {
-            return res.status(400).json({ error: 'Role phải là customer hoặc host.' });
+            return res.status(400).json({ error: 'Role không hợp lệ.' });
         }
 
-        // 2. Kiểm tra Email tồn tại
+        // 2. KIỂM TRA ĐẦU VÀO RIÊNG CỦA HOST
+        if (normalizedRole === 'host') {
+            if (!companyName || !taxCode) {
+                return res.status(400).json({ error: 'Host bắt buộc nhập Tên công ty và Mã số thuế!' });
+            }
+            // Multer xử lý thành công sẽ nạp dữ liệu vào req.file
+            if (!req.file) { 
+                return res.status(400).json({ error: 'Vui lòng tải lên Giấy phép kinh doanh!' });
+            }
+        }
+
+        // 3. KIỂM TRA EMAIL TRÙNG LẶP
         const existingUser = await User.findOne({ Email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ error: 'Email này đã được đăng ký!' });
         }
 
-        // 3. Hash Mật khẩu
+        // 4. MÃ HÓA MẬT KHẨU VÀ TẠO USER
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(String(password), salt);
 
-        // 4. Tạo User mới
         const user = await User.create({
             Email: normalizedEmail,
             PasswordHash: passwordHash,
-            FullName: normalizedFullName,
+            FullName: String(fullName).trim(),
             Role: normalizedRole,
             Status: 'active'
         });
 
-        // 5. Tạo Profile theo Role
+        // 5. TẠO PROFILE TƯƠNG ỨNG
         if (normalizedRole === 'host') {
-            // BẬT LẠI TÍNH NĂNG KIỂM TRA BẮT BUỘC
-            if (!companyName || !hotline || !bankName || !bankNumber) {
-                await User.findByIdAndDelete(user._id);
-                return res.status(400).json({ 
-                    error: 'Đăng ký Host yêu cầu bổ sung: Tên công ty, Hotline, Tên ngân hàng, Số tài khoản!' 
-                });
-            }
-
-            // LƯU DỮ LIỆU THẬT MÀ NGƯỜI DÙNG NHẬP VÀO
             await HostProfile.create({
                 UserID: user._id,
                 CompanyName: String(companyName).trim(),
+                TaxCode: String(taxCode).trim(), 
+                VerificationDocument: req.file.path, // Đường link URL từ Cloudinary tự động được lưu tại đây
                 Logo: "",
-                Hotline: String(hotline).trim(),
-                TaxCode: "",
-                VerificationDocument: "",
+                Hotline: String(phone).trim(),
                 IsVerified: false,
                 BankName: String(bankName).trim(),
                 BankNumber: String(bankNumber).trim()
@@ -94,33 +90,19 @@ async function registerUser(req, res) {
         } else {
             await CustomerProfile.create({
                 UserID: user._id,
-                Avatar: "",
-                Phone: "",
-                Description: "",
-                JobTitle: "",
-                Company: "",
-                BankName: "",
-                BankNumber: ""
+                Phone: String(phone).trim(),
+                BankName: String(bankName).trim(),
+                BankNumber: String(bankNumber).trim(),
+                Avatar: "", Description: "", JobTitle: "", Company: ""
             });
         }
 
-        // 6. Trả về kết quả
-        return res.status(201).json({
-            message: 'Đăng ký thành công.',
-            user: {
-                id: user._id,
-                email: user.Email,
-                fullName: user.FullName,
-                role: user.Role,
-                status: user.Status
-            }
-        });
+        return res.status(201).json({ message: 'Đăng ký thành công.', user: { id: user._id } });
 
     } catch (error) {
         return sendServerError(res, error);
     }
 }
-
 // ================= LOGIC ĐĂNG NHẬP (PROMPT 2) =================
 async function loginUser(req, res) {
     try {
@@ -231,7 +213,97 @@ async function changePassword(req, res) {
             return res.status(500).json({ error: 'Mật khẩu mới trùng mật khẩu cũ hoặc lỗi hệ thống không thể ghi đè!' });
         }
 
-        return res.status(200).json({ message: 'Cập nhật mật khẩu thành công!' });
+        return res.status(200).json({
+            message: 'Cập nhật mật khẩu thành công!'
+        });
+
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+}
+
+// ================= BỘ NHỚ TẠM LƯU MÃ OTP MÔ PHỎNG ("Quên mật khẩu?" ở trang Đăng nhập)=================
+// Lưu cấu trúc dạng: { "email@gmail.com": { otp: "123456", expires: 17189012345 } }
+const otpCache = {};
+
+// Bước 1: Kiểm tra Email và Sinh mã OTP in ra Console
+async function forgotPassword(req, res) {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ error: 'Vui lòng nhập Email!' });
+
+        const normalizedEmail = normalizeEmail(email);
+        
+        // Kiểm tra xem email có tồn tại trên hệ thống không
+        const user = await User.findOne({ Email: normalizedEmail });
+        if (!user) {
+            return res.status(404).json({ error: 'Email này không tồn tại trong hệ thống!' });
+        }
+
+        // Sinh mã OTP ngẫu nhiên gồm 6 chữ số
+        const generatedOtp = String(Math.floor(100000 + Math.random() * 900000));
+        
+        // Lưu mã OTP vào bộ nhớ tạm, hết hạn sau 5 phút
+        otpCache[normalizedEmail] = {
+            otp: generatedOtp,
+            expires: Date.now() + 5 * 60 * 1000 
+        };
+
+        // KỸ THUẬT MOCKING: In mã OTP ra màn hình Terminal của Nhóm trưởng
+        console.log('\n======================================================');
+        console.log(`🔥 [MOCK OTP] YÊU CẦU QUÊN MẬT KHẨU TỪ: ${normalizedEmail}`);
+        console.log(`🔑 MÃ OTP XÁC THỰC CỦA BẠN LÀ: ${generatedOtp}`);
+        console.log('======================================================\n');
+
+        return res.status(200).json({ 
+            message: 'Mã xác nhận OTP đã được gửi hệ thống (Hãy kiểm tra Terminal máy chủ)!' 
+        });
+
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+}
+
+// Bước 2: Xác thực mã OTP và Tiến hành cập nhật mật khẩu mới
+async function resetPassword(req, res) {
+    try {
+        const { email, otp, newPassword } = req.body;
+
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ error: 'Vui lòng điền đầy đủ tất cả các trường!' });
+        }
+        if (!isValidPassword(newPassword)) {
+            return res.status(400).json({ error: 'Mật khẩu mới phải >= 6 ký tự, bao gồm cả chữ và số!' });
+        }
+
+        const normalizedEmail = normalizeEmail(email);
+        const cachedData = otpCache[normalizedEmail];
+
+        // 1. Kiểm tra mã OTP xem có hợp lệ hoặc hết hạn chưa
+        if (!cachedData) {
+            return res.status(400).json({ error: 'Không tìm thấy yêu cầu đổi mật khẩu hoặc mã đã hết hạn!' });
+        }
+        if (Date.now() > cachedData.expires) {
+            delete otpCache[normalizedEmail]; // Xóa mã hết hạn
+            return res.status(400).json({ error: 'Mã OTP đã hết hạn 5 phút, vui lòng lấy mã mới!' });
+        }
+        if (cachedData.otp !== String(otp).trim()) {
+            return res.status(400).json({ error: 'Mã OTP nhập vào không chính xác!' });
+        }
+
+        // 2. Tiến hành mã hóa mật khẩu mới và lưu vào DB
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(String(newPassword), salt);
+
+        await User.findOneAndUpdate(
+            { Email: normalizedEmail },
+            { $set: { PasswordHash: passwordHash } }
+        );
+
+        // 3. Đổi mật khẩu thành công -> Xóa mã OTP khỏi bộ nhớ tạm
+        delete otpCache[normalizedEmail];
+
+        return res.status(200).json({ message: 'Đổi mật khẩu thành công! Vui lòng đăng nhập lại.' });
 
     } catch (error) {
         return sendServerError(res, error);
@@ -242,5 +314,7 @@ module.exports = {
     registerUser,
     loginUser,
     logoutUser,
-    changePassword
+    changePassword,
+   forgotPassword,
+    resetPassword
 };
