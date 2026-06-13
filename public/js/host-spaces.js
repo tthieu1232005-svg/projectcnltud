@@ -1,5 +1,5 @@
 // =======================================================
-// QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
+// QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES) - MOCK DATA
 // =======================================================
 
 const DEFAULT_FACILITIES = {
@@ -185,7 +185,7 @@ function addFacilityGoStep2() {
     const name = document.getElementById('add-fac-name')?.value.trim();
     const address = document.getElementById('add-fac-address')?.value.trim();
     if (!name || !address) {
-        showToast('Vui lòng nhập Tên cơ sở và Địa chỉ');
+        showToast?.('Vui lòng nhập Tên cơ sở và Địa chỉ') || alert('Vui lòng nhập Tên cơ sở và Địa chỉ');
         return;
     }
     document.getElementById('add-fac-summary-name').textContent = name;
@@ -290,12 +290,12 @@ function saveNewFacility() {
     const note = document.getElementById('add-fac-note')?.value.trim();
     const spaces = collectSpacesFromWizard();
     if (!name || !address) {
-        showToast('Thiếu thông tin cơ sở');
+        showToast?.('Thiếu thông tin cơ sở') || alert('Thiếu thông tin cơ sở');
         setAddFacilityStep(1);
         return;
     }
     if (!spaces.length) {
-        showToast('Thêm ít nhất một không gian có Tên/Mã');
+        showToast?.('Thêm ít nhất một không gian có Tên/Mã') || alert('Thêm ít nhất một không gian có Tên/Mã');
         return;
     }
     const facId = slugifyFacilityId(name);
@@ -306,7 +306,7 @@ function saveNewFacility() {
     persistHostFacilities();
     renderFacilityList();
     showHostSpaceLayer('space-mgr-layer-1');
-    showToast(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
+    showToast?.(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`) || alert(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
 }
 
 function initHostSpacesPage() {
@@ -361,9 +361,9 @@ async function loadHostBookings() {
     const emptyState = document.getElementById('booking-empty-state');
     
     const token = localStorage.getItem('token'); 
-    const hostId = localStorage.getItem('userId');
-
-    if (!hostId || !token) {
+    
+    // Nếu chưa đăng nhập, không tải
+    if (!token) {
         if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-bold bg-red-50 rounded-xl">Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại!</td></tr>`;
         if (emptyState) emptyState.style.display = 'none';
         return;
@@ -461,8 +461,11 @@ function applyCombinedFilters() {
             const bookingId = (booking._id || '').toLowerCase();
             const customer = booking.CustomerID || booking.customerID || {};
             const customerEmail = (customer.email || customer.Email || '').toLowerCase();
+            const customerName = (customer.fullName || customer.FullName || '').toLowerCase();
             
-            passKeyword = bookingId.includes(currentKeywordFilter) || customerEmail.includes(currentKeywordFilter);
+            passKeyword = bookingId.includes(currentKeywordFilter) || 
+                          customerEmail.includes(currentKeywordFilter) || 
+                          customerName.includes(currentKeywordFilter);
         }
 
         return passStatus && passTime && passKeyword;
@@ -646,6 +649,8 @@ function renderBookingsToTable(bookingsList) {
         }
 
         const displayEmail = customer.email || customer.Email || '<span class="text-rose-500">Lỗi dữ liệu khách</span>';
+        const displayCustName = customer.fullName || customer.FullName || '';
+        const nameUI = displayCustName ? `<div class="text-slate-800 font-bold text-xs mt-1">${displayCustName}</div>` : '';
 
         function getSpaceDisplayName(sp) {
             if (!sp || typeof sp !== 'object') return 'Chưa cập nhật tên Không gian';
@@ -676,8 +681,9 @@ function renderBookingsToTable(bookingsList) {
 
         return `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
-                <td class="p-5 font-bold text-slate-800">
+                <td class="p-5">
                     <div class="text-teal-600 font-black">#${booking._id ? booking._id.substring(booking._id.length - 6).toUpperCase() : 'N/A'}</div>
+                    ${nameUI}
                     <div class="text-slate-500 text-[11px] font-medium mt-0.5">${displayEmail}</div>
                 </td>
                 

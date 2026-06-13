@@ -194,7 +194,7 @@ function logout() {
     window.location.href = '/login';
 }
 
-// Ẩn menu người dùng khi click ra ngoài (UX Của nhánh HEAD)
+// Ẩn menu người dùng khi click ra ngoài
 document.addEventListener('click', (event) => {
     const userInfo = document.getElementById('user-info');
     const dropdown = document.getElementById('dropdown-menu');
@@ -204,7 +204,7 @@ document.addEventListener('click', (event) => {
 });
 
 // ==========================================
-// XỬ LÝ SỰ KIỆN ĐỔI MẬT KHẨU (GỬI API LÊN BACKEND - Của nhánh Na)
+// XỬ LÝ SỰ KIỆN ĐỔI MẬT KHẨU (GỬI API LÊN BACKEND)
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Tìm nút "THAY ĐỔI MẬT KHẨU"
@@ -217,7 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
         changePasswordBtn.addEventListener('click', async (e) => {
             e.preventDefault();
 
-            // 2. Trỏ tới các ô nhập (Tìm dựa theo loại input password)
+            // 2. Trỏ tới các ô nhập
             const inputs = document.querySelectorAll('input[type="password"]');
 
             const oldPasswordInput = inputs[0];
@@ -256,7 +256,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 4. Lấy token
                 const token = localStorage.getItem('token');
 
-                // 5. Gửi request Fetch (ĐÃ SỬA ĐƯỜNG LINK THÀNH /api/auth/...)
+                // 5. Gửi request Fetch
                 const response = await fetch('/api/auth/change-password', {
                     method: 'POST',
                     headers: {

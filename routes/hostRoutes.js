@@ -1,51 +1,62 @@
 const express = require('express');
-
-// Import đúng và đầy đủ các hàm từ Controller của riêng BẠN
-const { 
-  getHostProfile, 
-  updateHostProfile, 
-  getHostBranches, 
-  getHostSpaces, 
-  getHostBookings,
-  confirmBooking, 
-  cancelBooking,
-  checkinBooking
-} = require('../controllers/hostController');
-
-// Import Middleware bảo mật
-const { verifyToken, authorizeRole } = require('../middleware/auth');
-
 const router = express.Router();
 
-// ====================================================================
-// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ FILE REST API BÊN DƯỚI
-// Yêu cầu: Phải có Token hợp lệ VÀ người dùng phải có role là 'host'
-// Dữ liệu giải mã từ Token sẽ được tự động nhét vào biến req.user
-// ====================================================================
-router.use(verifyToken, authorizeRole('host'));
+// Import Controller (dùng require dạng nguyên khối để tránh sai tên hàm)
+const hostController = require('../controllers/hostController');
 
+// Import Middleware bảo mật (dùng đường dẫn chuẩn xác từ nhánh HEAD)
+const authMiddleware = require('../middlewares/authMiddleware');
+const upload = require('../middlewares/upload');
+// ====================================================================
+// 1. CÁC ROUTE RENDER GIAO DIỆN (VIEWS) - Không khóa API Token
+// ====================================================================
+router.get('/dashboard', hostController.renderDashboardView);
+
+router.get('/profile', (req, res) => {
+  res.render('host/profile', {
+    success: false,
+    scripts: '<script src="/js/host-profile.js"></script>'
+  });
+});
 
 // ====================================================================
-// CÁC API LẤY & CẬP NHẬT THÔNG TIN (ĐÃ KHỬ SẠCH /:hostId DƯ THỪA)
+// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ REST API BÊN DƯỚI
+// Yêu cầu: Client phải gửi kèm Token hợp lệ trong Header
 // ====================================================================
-router.get('/bookings', getHostBookings);
-router.get('/branches', getHostBranches);
-router.get('/spaces', getHostSpaces);
-
-router.get('/profile', getHostProfile);
-router.put('/profile', updateHostProfile);
-
+router.use(authMiddleware.verifyToken);
 
 // ====================================================================
-// CÁC API HÀNH ĐỘNG (THAO TÁC VỚI ĐƠN HÀNG CỦA BẠN - ĐÃ BỎ /:hostId)
+// 2. CÁC API THỐNG KÊ & HỒ SƠ (Gộp từ nhánh HEAD)
 // ====================================================================
+router.get('/api/dashboard-stats', hostController.getDashboardStatsAPI);
+router.get('/api/profile', hostController.getProfileAPI);
+router.put('/api/profile', upload.single('LogoFile'), hostController.updateProfileAPI);
+
+// ====================================================================
+// 3. CÁC API CƠ SỞ & KHÔNG GIAN (Gộp từ nhánh MAIN)
+// ====================================================================
+router.get('/branches', hostController.getHostBranches);
+router.get('/spaces', hostController.getHostSpaces);
+
+// [BỔ SUNG QUAN TRỌNG] Route POST tạo cơ sở mới mà chúng ta vừa viết thêm
+// Nếu trong hostController chưa có hàm này, tạm thời nó sẽ bị bỏ qua
+if (typeof hostController.createBranchAndSpaces === 'function') {
+  router.post('/branches', hostController.createBranchAndSpaces);
+}
+
+// ====================================================================
+// 4. CÁC API QUẢN LÝ ĐƠN HÀNG CỦA HOST (Gộp từ nhánh MAIN)
+// ====================================================================
+router.get('/bookings', hostController.getHostBookings);
+
 // Host xác nhận đơn (Chuyển sang confirmed + Tạo Payment)
-router.put('/bookings/:bookingId/confirm', confirmBooking);
-
-// Host từ chối đơn (Chuyển sang cancelled)
-router.put('/bookings/:bookingId/cancel', cancelBooking);
+router.put('/bookings/:bookingId/confirm', hostController.confirmBooking);
 
 // Host check-in đơn (Chuyển sang in-use)
-router.put('/bookings/:bookingId/checkin', checkinBooking);
+router.put('/bookings/:bookingId/checkin', hostController.checkinBooking);
+
+// Host từ chối/hủy đơn (Chuyển sang cancelled)
+router.put('/bookings/:bookingId/cancel', hostController.cancelBooking);
+
 
 module.exports = router;

@@ -58,7 +58,6 @@ app.use('/api/customers', customerRoutes);
 app.use('/api/hosts', hostRoutes);
 app.use('/api/admin', adminRoutes);
 
-
 // ==========================================
 // KHAI BÁO CÁC WEB ROUTES (Render Giao diện EJS)
 // ==========================================
@@ -71,23 +70,8 @@ app.get('/register', (req, res) => {
     res.render('customer/register');
 });
 
-// --- Luồng Khách hàng (Customer) ---
-
-// Các trang lịch sử & thanh toán giữ nguyên (Đề phòng Na chưa chuyển sang file Router)
-app.get('/payment', (req, res) => {
-    res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-app.get('/history', (req, res) => {
-    res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-app.get('/payment_history', (req, res) => {
-    res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-app.get('/profile', (req, res) => {
-    res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
 // --- Luồng Chủ cơ sở (Host) ---
+// PHẢI ĐẶT LÊN TRÊN ĐỂ KHÔNG BỊ ROUTE KHÁC NHẬN VƠ
 app.get('/host/profile', (req, res) => {
     res.render('host/profile', { scripts: '<script src="/js/host-spaces.js"></script>' });
 });
@@ -108,6 +92,7 @@ app.get('/host/payments', (req, res) => {
 });
 
 // --- Luồng Admin ---
+// PHẢI ĐẶT LÊN TRÊN ĐỂ KHÔNG BỊ ROUTE KHÁC NHẬN VƠ
 app.get('/admin/dashboard', (req, res) => {
     res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
@@ -118,10 +103,24 @@ app.get('/admin/hosts', (req, res) => {
     res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
 
-// --- Các trang khác ---
+// --- Luồng Khách hàng (Customer) ---
+app.get('/payment', (req, res) => {
+    res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
+app.get('/history', (req, res) => {
+    res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
+app.get('/payment_history', (req, res) => {
+    res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
+app.get('/profile', (req, res) => {
+    res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
+});
 
-
+// DÒNG NÀY PHẢI NẰM CUỐI CÙNG TRONG DANH SÁCH WEB ROUTE
+// Tiếp thu cấu trúc của Na: Gom gọn các trang Home, Search, Detail vào file Route
 app.use('/', customerRoutes);
+
 // ==========================================
 // MIDDLEWARE XỬ LÝ LỖI TỔNG
 // ==========================================
