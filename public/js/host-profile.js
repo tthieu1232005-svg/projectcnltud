@@ -1,4 +1,4 @@
-// Hàm gom nhóm việc làm sạch/ẩn các ô nhập mật khẩu (Tránh lặp code)
+// Hàm gom nhóm việc làm sạch/ẩn các ô nhập mật khẩu
 function clearPasswordFields() {
     ['old-password', 'new-password', 'confirm-password'].forEach(id => {
         const el = document.getElementById(id);
@@ -50,7 +50,8 @@ async function loadProfile() {
     if (!token) return console.error('Không tìm thấy token xác thực. Vui lòng đăng nhập lại.');
 
     try {
-        const response = await fetch('/host/api/profile', {
+        // Đã sửa đường dẫn URL chuẩn
+        const response = await fetch('/api/hosts/profile', {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -60,7 +61,6 @@ async function loadProfile() {
 
         const { user = {}, profile = {} } = data;
 
-        // Định nghĩa cặp [ID phần tử, Giá trị dữ liệu] để lặp cho gọn, loại bỏ đống IF rác
         const mapping = {
             'host-name-input': user.FullName,
             'email': user.Email,
@@ -96,13 +96,11 @@ async function updateProfile() {
     const token = localStorage.getItem('token');
     if (!submitBtn) return;
 
-    // 1. Khóa nút bấm tránh click liên tục
     submitBtn.disabled = true;
     submitBtn.innerText = 'ĐANG XỬ LÝ...';
     submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
 
     try {
-        // --- PHẦN 1: XỬ LÝ ĐỔI MẬT KHẨU (NẾU CÓ NHẬP) ---
         const oldPassword = document.getElementById('old-password')?.value.trim() || '';
         const newPassword = document.getElementById('new-password')?.value.trim() || '';
 
@@ -124,9 +122,9 @@ async function updateProfile() {
             if (!passResponse.ok) return alert('Lỗi đổi mật khẩu: ' + (passResult.error || 'Thất bại'));
         }
 
-        // --- PHẦN 2: XỬ LÝ CẬP NHẬT HỒ SƠ DOANH NGHIỆP ---
         const formElement = document.getElementById('profile-form');
-        const profileResponse = await fetch('/host/api/profile', {
+        // Đã sửa đường dẫn URL chuẩn
+        const profileResponse = await fetch('/api/hosts/profile', {
             method: 'PUT',
             headers: { 'Authorization': `Bearer ${token}` },
             body: new FormData(formElement)
@@ -137,7 +135,6 @@ async function updateProfile() {
         if (profileResponse.ok) {
             typeof showToast === 'function' ? showToast('Cập nhật hồ sơ thành công!') : alert('Cập nhật hồ sơ thành công!');
 
-            // Ẩn lại các ô mật khẩu và làm sạch dữ liệu
             document.getElementById('password-fields')?.classList.add('hidden');
             clearPasswordFields();
             loadProfile();

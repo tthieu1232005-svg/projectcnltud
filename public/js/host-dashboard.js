@@ -13,7 +13,8 @@ async function loadDashboardData(branchId) {
     }
 
     try {
-        const response = await fetch(`/host/api/dashboard-stats?branchId=${branchId}`, {
+        // Đã sửa đường dẫn URL chuẩn
+        const response = await fetch(`/api/hosts/dashboard-stats?branchId=${branchId}`, {
             method: 'GET',
             headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -29,7 +30,7 @@ async function loadDashboardData(branchId) {
         document.getElementById('finance-paid').innerText = result.stats.revenue.toLocaleString('vi-VN') + 'đ';
         document.getElementById('finance-pending').innerText = result.stats.paidAmount.toLocaleString('vi-VN') + 'đ';
 
-        // 2. Render Tabs Chi nhánh (Chỉ chạy khi ở tab Tất cả)
+        // 2. Render Tabs Chi nhánh
         if (branchId === 'all' && result.branches) {
             const tabContainer = document.getElementById('branch-tabs-container');
             tabContainer.innerHTML = `<button type="button" data-id="all" class="branch-tab px-5 py-2.5 rounded-xl text-sm font-bold transition ${currentSelectedBranch === 'all' ? 'bg-indigo-600 text-white' : 'text-slate-600'}" onclick="switchBranch('all')">Tất cả</button>`;
@@ -41,7 +42,7 @@ async function loadDashboardData(branchId) {
             });
         }
 
-        // 3. Khởi tạo Biểu đồ với dữ liệu thực tế từ Backend
+        // 3. Khởi tạo Biểu đồ
         if (typeof Chart !== 'undefined' && result.chartData) {
             renderChart(result.chartData);
         }
@@ -65,7 +66,7 @@ async function loadDashboardData(branchId) {
         // 5. Render Danh sách Booking gần nhất
         const tableBody = document.getElementById('host-recent-table');
         if (tableBody) {
-            tableBody.innerHTML = ''; // Xóa dữ liệu cũ
+            tableBody.innerHTML = ''; 
 
             if (result.recentBookings && result.recentBookings.length > 0) {
                 result.recentBookings.forEach(booking => {
@@ -73,7 +74,6 @@ async function loadDashboardData(branchId) {
                     const spaceName = booking.SpaceID?.SpaceCode || booking.SpaceID?.name || 'N/A';
                     const date = new Date(booking.createdAt).toLocaleDateString('vi-VN');
 
-                    // Mapping trạng thái
                     const statusMap = { 'pending': 'Chờ duyệt', 'confirmed': 'Đã xác nhận', 'in-use': 'Đang sử dụng', 'completed': 'Hoàn thành' };
                     const statusText = statusMap[booking.Status] || booking.Status;
 
@@ -101,11 +101,10 @@ async function loadDashboardData(branchId) {
     }
 }
 
-// Hàm renderChart tách riêng cho sạch code
+// Hàm renderChart tách riêng
 function renderChart(chartData) {
     const ctx = document.getElementById('bookingChart').getContext('2d');
 
-    // Hủy biểu đồ cũ nếu đã vẽ trước đó (khi switch chi nhánh)
     if (myChart) {
         myChart.destroy();
     }
@@ -132,9 +131,7 @@ function renderChart(chartData) {
             responsive: true,
             maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    display: false
-                },
+                legend: { display: false },
                 tooltip: {
                     backgroundColor: '#1e293b',
                     padding: 12,
@@ -146,14 +143,8 @@ function renderChart(chartData) {
             scales: {
                 y: {
                     beginAtZero: true,
-                    ticks: {
-                        stepSize: 1,
-                        color: '#94a3b8'
-                    },
-                    grid: {
-                        color: '#f1f5f9',
-                        drawBorder: false
-                    }
+                    ticks: { stepSize: 1, color: '#94a3b8' },
+                    grid: { color: '#f1f5f9', drawBorder: false }
                 },
                 x: {
                     ticks: { color: '#94a3b8', font: { weight: 'bold' } },
@@ -164,7 +155,7 @@ function renderChart(chartData) {
     });
 }
 
-// Hàm switchBranch cải tiến
+// Hàm switchBranch
 function switchBranch(branchId) {
     currentSelectedBranch = branchId;
     document.querySelectorAll('.branch-tab').forEach(tab => {
