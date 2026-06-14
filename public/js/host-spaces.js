@@ -2,10 +2,10 @@
 // QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
 // =======================================================
 
-let addFacilityDraft = { imageDataUrl: '', spaces: [] };
-let addFacilitySpaceCounter = 0;
-let currentBranchId = null;
-let currentSpaceId = null;
+var addFacilityDraft = { imageDataUrl: '', spaces: [] };
+var addFacilitySpaceCounter = 0;
+var currentBranchId = null;
+var currentSpaceId = null;
 
 const SPACE_STATUS_LABELS = {
     available: "Sẵn sàng",
