@@ -506,8 +506,9 @@ module.exports = {
   updateHostProfile,
   getHostBranches,
   getHostSpaces,
+  getHostReportsPage,
   getHostBookings,
-  confirmBooking, 
+  confirmBooking,
   cancelBooking,
-  checkinBooking  
+  checkinBooking
 };
