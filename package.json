@@ -21,6 +21,7 @@
     "express-ejs-layouts": "^2.5.1",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.6.3",
+    "socket.io": "^4.8.3",
     "multer": "^2.1.1",
     "multer-storage-cloudinary": "^4.0.0"
   },
@@ -32,4 +33,5 @@
     "url": "https://github.com/tthieu1232005-svg/projectcnltud/issues"
   },
   "homepage": "https://github.com/tthieu1232005-svg/projectcnltud#readme"
+
 }

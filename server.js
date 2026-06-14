@@ -1,7 +1,7 @@
-// File: server.js — điểm vào ứng dụng Express, thiết lập middleware, route và view engine.
-// Import Express web framework.
+const MONGODB_URI = 'mongodb://127.0.0.1:27017/coworking_db';
 const express = require('express');
-// Import middleware EJS layout để hỗ trợ layout chung cho view.
+const http = require('http');
+const { Server } = require('socket.io');
 const expressLayouts = require('express-ejs-layouts');
 // Import module path để xử lý đường dẫn tập tin.
 const path = require('path');
@@ -34,28 +34,35 @@ const User = require('./models/User');
 
 // Khởi tạo ứng dụng Express.
 const app = express();
-// Chọn cổng chạy server, ưu tiên biến môi trường PORT.
+
+// ==========================================
+// KHỞI TẠO SERVER VỚI HTTP VÀ SOCKET.IO
+// ==========================================
+const server = http.createServer(app);
+const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 
-// --- Kết nối MongoDB ---
-connectDB().then(() => {
-    // Chỉ bắt đầu server khi kết nối DB thành công.
-    app.listen(PORT, () => console.log(`🚀 Server đang chạy tại: http://localhost:${PORT}`));
+// ==========================================
+// CẤU HÌNH SOCKET.IO
+// ==========================================
+global.io = io; // Khai báo io toàn cục để các Controller dùng
+
+io.on('connection', (socket) => {
+    console.log('Một thiết bị vừa kết nối:', socket.id);
+    socket.on('disconnect', () => {
+        console.log('Thiết bị đã ngắt kết nối:', socket.id);
+    });
 });
 
+// ==========================================
+// MIDDLEWARE XỬ LÝ DỮ LIỆU & GIAO DIỆN
+// ==========================================
 // Tài nguyên tĩnh: phục vụ thư mục public.
 app.use(express.static(path.join(__dirname, 'public')));
-// --- Middleware xử lý dữ liệu ---
 // Parse JSON body gửi từ client.
 app.use(express.json());
 // Parse form URL encoded body.
 app.use(express.urlencoded({ extended: true }));
-
-// Đăng ký các route nhóm API.
-app.use('/api/auth', authRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/hosts', hostRoutes);
-app.use('/api/admin', adminRoutes);
 
 // View Engine: thiết lập EJS và layout chung cho giao diện.
 app.use(expressLayouts);
@@ -63,8 +70,25 @@ app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.set('layout', 'layout');
 
+// Set default locals
+app.use((req, res, next) => {
+    res.locals.req = req;       // Cấp quyền cho EJS đọc req
+    res.locals.branches = [];   // Tránh lỗi undefined khi render
+    res.locals.keyword = "";    // Tránh lỗi undefined khi render
+    next();
+});
 
-// === ROUTE LỊCH SỬ THANH TOÁN ===
+// ==========================================
+// KHAI BÁO CÁC API ROUTES (Trả dữ liệu JSON)
+// ==========================================
+app.use('/api/auth', authRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/hosts', hostRoutes);
+app.use('/api/admin', adminRoutes);
+
+// ==========================================
+// ROUTE LỊCH SỬ THANH TOÁN (LOGIC CÓ DB - TỪ HEAD)
+// ==========================================
 app.get('/payment_history', verifyToken, async (req, res) => {
     try {
         // LẤY USERID THẬT TỪ TOKEN
@@ -140,16 +164,27 @@ app.get('/payment_history', verifyToken, async (req, res) => {
     }
 });
 
-// --- CÁC ROUTES KHÁC CỦA NHÓM ---
+// ==========================================
+// KHAI BÁO CÁC WEB ROUTES (Render Giao diện EJS)
+// ==========================================
+
+// --- Luồng Đăng nhập / Đăng ký ---
+app.get('/login', (req, res) => {
+    res.render('customer/login');
+});
+app.get('/register', (req, res) => {
+    res.render('customer/register');
+});
+
+// --- Luồng Khách hàng (Customer) ---
 app.get('/', (req, res) => res.render('customer/home', { scripts: '<script src="/js/customer-main.js"></script>' }));
 app.get('/search', (req, res) => res.render('customer/search', { scripts: '<script src="/js/customer-main.js"></script>' }));
 app.get('/detail', (req, res) => res.render('customer/detail', { scripts: '<script src="/js/customer-main.js"></script>' }));
 app.get('/payment', (req, res) => res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' }));
 app.get('/history', (req, res) => res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' }));
 app.get('/profile', (req, res) => res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' }));
-app.get('/login', (req, res) => res.render('customer/login'));
-app.get('/register', (req, res) => res.render('customer/register'));
 
+// --- Luồng Chủ cơ sở (Host) ---
 app.get('/host/profile', (req, res) => res.render('host/profile', { scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/dashboard', (req, res) => res.render('host/dashboard', { scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/spaces', (req, res) => res.render('host/spaces', { scripts: '<script src="/js/host-spaces.js"></script>' }));
@@ -157,8 +192,39 @@ app.get('/host/bookings', (req, res) => res.render('host/bookings', { scripts: '
 app.get('/host/reports', verifyToken, getHostReportsPage);
 app.get('/host/payments', (req, res) => res.render('host/payments', { scripts: '<script src="/js/host-spaces.js"></script>' }));
 
+// --- Luồng Admin ---
 app.get('/admin/dashboard', (req, res) => res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' }));
+app.get('/admin/users', (req, res) => res.render('admin/users', { scripts: '<script src="/js/admin-main.js"></script>' }));
+app.get('/admin/hosts', (req, res) => res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' }));
 
+app.use('/', customerRoutes);
+
+// ==========================================
+// MIDDLEWARE XỬ LÝ LỖI TỔNG HỢP
+// ==========================================
 app.use((err, req, res, next) => {
-    res.status(500).json({ status: 'error', message: err.message });
+    console.error('❌ Lỗi server:', err);
+    res.status(err.status || 500).json({
+        status: 'error',
+        message: err.message || 'Đã xảy ra lỗi server'
+    });
 });
+
+// ==========================================
+// KẾT NỐI MONGODB & KHỞI ĐỘNG SERVER
+// ==========================================
+connectDB()
+    .then(() => {
+        console.log('✅ MongoDB connected, starting server...');
+        // CHÚ Ý: Bắt buộc dùng server.listen (với http.createServer) để Socket.IO hoạt động
+        server.listen(PORT, () => {
+            console.log(`🚀 WorkHub Server đang chạy tại: http://localhost:${PORT}`);
+            console.log(`👉 Bấm Ctrl + Click vào link để mở trình duyệt.`);
+        });
+    })
+    .catch(err => {
+        console.error('❌ Không thể kết nối MongoDB, server không khởi động:', err);
+        process.exit(1);
+    });
+
+module.exports = app;

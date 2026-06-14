@@ -1,6 +1,6 @@
 <!-- Xác nhận thanh toán -->
  <div class="max-w-4xl">
-    <button onclick="navigateTo('detail')" class="text-sm font-bold text-slate-500 mb-4 inline-block hover:text-teal-600">← QUAY LẠI THÔNG TIN</button>
+    <button onclick="window.location.href='/detail?branchId=' + encodeURIComponent(new URLSearchParams(window.location.search).get('branchId') || '')" class="text-sm font-bold text-slate-500 mb-4 inline-block hover:text-teal-600">← QUAY LẠI THÔNG TIN</button>
     <h2 class="text-3xl font-bold mb-8 text-slate-800">Xác nhận thanh toán</h2>
     <div class="grid md:grid-cols-2 gap-8">
         <div class="space-y-4">
@@ -26,8 +26,9 @@
                 <img id="qr-img" src="" class="mx-auto w-44 h-44 mb-4 border p-2 rounded-lg shadow-inner">
                 <div class="text-3xl font-black text-teal-600 mb-6" id="qr-price-val">0đ</div>
                 <button onclick="handleFinalSuccess()" class="w-full bg-teal-600 text-white py-4 rounded-2xl font-bold shadow-lg hover:bg-teal-700 transition">TÔI ĐÃ CHUYỂN KHOẢN</button>
+                <input type="hidden" id="bookingId" value="" />
             </div>
             <div id="qr-placeholder" class="text-slate-400 italic">Vui lòng chọn mức thanh toán để nhận mã QR</div>
         </div>
     </div>
-</div>
+</div>`
