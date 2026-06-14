@@ -1,58 +1,62 @@
 const express = require('express');
-const { 
-    getHomePage,
-    searchBranches,
-    detailPage,
-    getCustomerProfile, 
-    updateCustomerProfile, 
-    getCustomerBookings,
-    createBooking,
-    confirmBooking,
-    checkAvailableSpaces,
-    getBranchReviews
+
+const {
+  getHomePage,
+  searchBranches,
+  getCustomerProfile,
+  updateCustomerProfile,
+  getCustomerBookings,
+  createBooking,
+  confirmPayment, 
+  payRemainder,
+  submitReview,
+  getReview,
+  getBranchReviews,
+  checkAvailability,
+  getMyProfile,
+  updateMyProfile
 } = require('../controllers/customerController');
+
+const { verifyToken, authorizeRole } = require('../middleware/auth');
+const uploadCloud = require('../middlewares/upload');
 
 const router = express.Router();
 
 // ==========================================
-// PAGE ROUTES (Render EJS)
+// TRANG GIAO DIỆN (KHÔNG CẦN ĐĂNG NHẬP)
 // ==========================================
 router.get('/', getHomePage);
 router.get('/search', searchBranches);
-router.get('/detail', detailPage);
-
-router.get('/payment', (req, res) => {
-    res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-router.get('/history', (req, res) => {
-    res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-router.get('/payment_history', (req, res) => {
-    res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
-
-router.get('/profile', (req, res) => {
-    res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
+router.get('/branch/:branchId/reviews', getBranchReviews);
 
 // ==========================================
-// API ROUTES (Return JSON)
+// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ ROUTE BÊN DƯỚI
 // ==========================================
-// Booking APIs
-router.post('/booking/create', createBooking);
-router.post('/booking/confirm', confirmBooking);
+router.use(verifyToken, authorizeRole('customer'));
 
-// Space APIs
-router.post('/spaces/check', checkAvailableSpaces);
+// ==========================================
+// THÔNG TIN KHÁCH HÀNG (HỒ SƠ CỦA CHÍNH MÌNH)
+// ==========================================
+router.get('/me/profile', getMyProfile);
+router.put('/me/profile', uploadCloud.single('customerAvatar'), updateMyProfile);
 
-// Reviews theo branch
-router.get('/branches/:branchId/reviews', getBranchReviews);
-
-// Profile APIs
+// Route cũ (xem/sửa hồ sơ theo userId - cho admin/host)
 router.get('/:userId/profile', getCustomerProfile);
 router.put('/:userId/profile', updateCustomerProfile);
+
+// ==========================================
+// ĐẶT CHỖ
+// ==========================================
 router.get('/:userId/bookings', getCustomerBookings);
+router.post('/:userId/bookings', createBooking);
+router.post('/bookings/check-availability', checkAvailability);
+router.post('/booking/confirm', confirmPayment);
+router.put('/:userId/bookings/:bookingId/pay', payRemainder);
+
+// ==========================================
+// ĐÁNH GIÁ
+// ==========================================
+router.get('/bookings/:bookingId/review', getReview);
+router.post('/:userId/bookings/:bookingId/review', submitReview);
 
 module.exports = router;

@@ -1,23 +1,20 @@
 <h2 class="text-2xl font-black text-slate-800 mb-8 tracking-tighter uppercase">Hồ sơ Khách hàng</h2>
-
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-6xl">
     <div class="lg:col-span-1">
         <div class="bg-white p-8 rounded-[2rem] border text-center shadow-sm">
             <div class="relative w-32 h-32 mx-auto mb-4">
                 <div class="w-full h-full rounded-full border-4 border-teal-50 bg-teal-100 flex items-center justify-center overflow-hidden shadow-inner">
-                    <img id="profile-avatar-preview" src="https://ui-avatars.com/api/?name=Kh%E1%BB%9Fng+%E1%BA%A3nh&size=200" class="w-full h-full object-cover" alt="Avatar" />
+                    <img id="profile-avatar-preview" src="https://ui-avatars.com/api/?name=User&size=200" class="w-full h-full object-cover">
                 </div>
-
                 <label class="absolute bottom-0 right-0 bg-teal-600 text-white p-2 rounded-full cursor-pointer shadow-lg hover:bg-teal-700 transition scale-90">
                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"></path>
                         <path d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"></path>
                     </svg>
-                    <input type="file" class="hidden" accept="image/*" onchange="previewProfileImage(this)" />
+                    <input type="file" id="input-avatar" class="hidden" accept="image/*" onchange="previewProfileImage(this)">
                 </label>
             </div>
-
-            <h3 class="text-xl font-bold text-slate-800 mt-2" id="profile-fullname">Người dùng</h3>
+            <h3 id="profile-display-name" class="text-xl font-bold text-slate-800 mt-2">--</h3>
             <p class="text-xs text-slate-500 font-bold uppercase tracking-widest mt-1">Khách hàng</p>
         </div>
     </div>
@@ -27,151 +24,39 @@
             <h3 class="font-black text-lg mb-6 text-slate-800 flex items-center gap-2 uppercase tracking-tighter">
                 <span>📝</span> Thông tin chi tiết
             </h3>
-
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Họ và tên</label>
-                    <input id="profile-job-fullname" type="text" placeholder="Nhập họ và tên" class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800" />
+                    <input type="text" id="input-fullname" placeholder="Nhập họ và tên..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800">
                 </div>
 
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Email đăng nhập</label>
-                    <input id="profile-email" type="email" placeholder="Email" class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-500" disabled />
+                    <input type="email" id="input-email" class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-500" disabled>
                 </div>
 
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
                     <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Số điện thoại liên hệ</label>
-                    <input id="profile-phone" type="text" placeholder="Nhập số điện thoại..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800" />
+                    <input type="text" id="input-phone" placeholder="Nhập số điện thoại..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800">
                 </div>
 
                 <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Nghề nghiệp</label>
-                    <input id="profile-jobtitle" type="text" placeholder="VD: Sinh viên, Lập trình viên..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800" />
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Tên ngân hàng</label>
+                    <input type="text" id="input-bank-name" placeholder="VD: Vietcombank, TPBank..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800">
                 </div>
 
                 <div class="md:col-span-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Trường học / Công ty</label>
-                    <input id="profile-company" type="text" placeholder="Tên công ty hoặc trường học của bạn..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800" />
+                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Số tài khoản ngân hàng</label>
+                    <input type="text" id="input-bank-number" placeholder="Nhập số tài khoản..." class="w-full bg-transparent border-none p-0 text-sm font-semibold focus:ring-0 outline-none text-slate-800">
                 </div>
+
             </div>
-
-            <div class="mt-8 pt-6 border-t border-slate-100 flex justify-end gap-3">
-
-                <button type="button" onclick="saveProfile()" class="bg-teal-600 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-teal-700 transition">
+            <div class="mt-8 pt-6 border-t border-slate-100 flex justify-end">
+                <button onclick="saveMyProfile()" class="bg-teal-600 text-white px-8 py-3 rounded-xl font-black text-xs uppercase tracking-widest shadow-lg hover:bg-teal-700 transition">
                     Lưu thay đổi
                 </button>
             </div>
-
-            <!-- token/session id user sẽ được gán bởi script ngoài (nếu có) -->
-<input type="hidden" id="profile-userId" value="" />
         </div>
     </div>
 </div>
-
-
-<!--
-  Ghi chú: Controller của bạn không truyền script nào từ profile.ejs,
-  nên phần JS phía dưới tự lấy userId từ:
-  1) input #profile-userId (nếu server render có userId)
-  2) global currentUserId (nếu có)
---> 
-
-
-<script>
-    // Nếu backend render không truyền userId thì trang vẫn có thể hoạt động khi có global currentUserId/token từ customer-main.js
-    const getUserId = () => {
-        const hidden = document.getElementById('profile-userId');
-        if (hidden && hidden.value) return hidden.value;
-        if (typeof currentUserId !== 'undefined' && currentUserId) return currentUserId;
-        return null;
-    };
-
-    function previewProfileImage(input) {
-        const file = input.files && input.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const img = document.getElementById('profile-avatar-preview');
-            if (img) img.src = reader.result;
-        };
-        reader.readAsDataURL(file);
-    }
-
-
-
-    async function loadProfile() {
-        const userId = getUserId();
-        if (!userId) return;
-
-        const token = localStorage.getItem('token');
-
-        try {
-            const res = await fetch(`/api/customers/${encodeURIComponent(userId)}/profile`, {
-                method: 'GET',
-                headers: {
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                }
-            });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || 'Không tải được hồ sơ');
-
-            const user = data.user || {};
-            const profile = data.profile || {};
-
-            document.getElementById('profile-fullname').textContent = user.fullName || user.username || 'Người dùng';
-            document.getElementById('profile-job-fullname').value = user.fullName || '';
-            document.getElementById('profile-email').value = user.email || '';
-            document.getElementById('profile-phone').value = profile.Phone || '';
-            document.getElementById('profile-jobtitle').value = profile.JobTitle || '';
-            document.getElementById('profile-company').value = profile.Company || '';
-
-            const avatar = profile.Avatar || '';
-            if (avatar) document.getElementById('profile-avatar-preview').src = avatar;
-        } catch (e) {
-            console.error(e);
-        }
-    }
-
-    async function saveProfile() {
-        const userId = getUserId();
-        if (!userId) {
-            showToast?.('Không xác định user để lưu hồ sơ');
-            return;
-        }
-
-        const token = localStorage.getItem('token');
-
-        const payload = {
-            Phone: document.getElementById('profile-phone').value || '',
-            JobTitle: document.getElementById('profile-jobtitle').value || '',
-            Company: document.getElementById('profile-company').value || ''
-        };
-
-        try {
-            const res = await fetch(`/api/customers/${encodeURIComponent(userId)}/profile`, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
-                },
-                body: JSON.stringify(payload)
-            });
-
-            const data = await res.json();
-            if (!res.ok) throw new Error(data?.error || 'Lưu thất bại');
-
-            showToast?.('Đã lưu thông tin khách hàng!');
-            await loadProfile();
-        } catch (e) {
-            console.error(e);
-            showToast?.(e.message || 'Lỗi lưu hồ sơ');
-        }
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        // chỉ load nếu có API cần thiết
-        loadProfile();
-    });
-</script>
-

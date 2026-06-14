@@ -9,6 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;900&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="/css/style.css">
 </head>
+<script src="/socket.io/socket.io.js"></script>
 <body>
     <div class="app-wrapper">
         <%- include('partials/header') %>
@@ -25,7 +26,6 @@
     <%- include('partials/modals') %>
 
     <script src="/js/main.js"></script>
-    <script src="/js/host-spaces.js"></script>
-    <script src="/js/customer-main.js"></script>
+    <%- typeof scripts !== 'undefined' ? scripts : '' %>
 </body>
 </html>

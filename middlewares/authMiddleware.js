@@ -29,6 +29,16 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+//Kiểm tra quyền truy cập theo vai trò (ví dụ: customer, host)
+function authorizeRole(...roles) {
+    return (req, res, next) => {
+        if (!req.user || !roles.includes(req.user.role)) {
+            return res.status(403).json({ error: 'Quyền truy cập bị từ chối.' });
+        }
+        next();
+    };
+}
+
 module.exports = {
     verifyToken,
     requireAdmin

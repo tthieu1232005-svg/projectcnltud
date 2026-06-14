@@ -3,41 +3,44 @@
 // ==========================================
 
 let selectedSeat = null;
-let currentPrices = { total: 500000, deposit: 150000 };
+let currentPrices = { total: 0, deposit: 0 };
 let currentRoomType = 'meeting';
 let roomImages = [];
 let currentImageIndex = 0;
 let selectedTimeSlot = null;
+let selectedPaymentType = 'deposit';
 
-// Kiểm tra xem đang ở trang detail không
-const isDetailPage = window.location.pathname.includes('/detail');
+// Kiểm tra xem đang ở trang nào
+const isDetailPage = (() => {
+    const p = window.location.pathname || '';
+    const s = window.location.search || '';
+    return p.includes('/detail') || s.includes('detail');
+})();
+
+const isPaymentPage = window.location.pathname.includes('/payment');
+const isProfilePage = window.location.pathname.includes('/profile');
 
 // ==========================================
 // HÀM CHUYỂN ĐỔI LOẠI PHÒNG
 // ==========================================
 function switchRoomType(type) {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
+    if (!isDetailPage) return;
     
-    currentRoomType = type; // 'meeting' hoặc 'desk'
-    selectedTimeSlot = null; // Reset thời gian chọn
-    selectedSeat = null; // Reset phòng chọn
+    currentRoomType = type;
+    selectedTimeSlot = null;
+    selectedSeat = null;
 
-    // 1. Reset trạng thái UI ngay lập tức
-    document.getElementById('available-slots-container')?.classList.add('hidden');
-    document.getElementById('booking-summary')?.classList.add('hidden');
+    ['available-slots-container', 'booking-summary'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
 
-    // 2. Reset trạng thái các nút khung giờ
     document.querySelectorAll('.timeslot-btn').forEach(btn => {
         btn.classList.remove('border-teal-600', 'bg-teal-600', 'text-white');
         btn.removeAttribute('data-selected');
     });
 
-    // 3. Reset các card phòng đã chọn
     document.querySelectorAll('.room-card').forEach(card => {
         card.classList.remove('border-teal-500', 'bg-teal-50/30');
     });
 
-    // 4. Cập nhật Tab Button
     const btnMeeting = document.getElementById('btn-type-meeting');
     const btnStudy = document.getElementById('btn-type-study');
 
@@ -53,7 +56,6 @@ function switchRoomType(type) {
             : "py-2 text-xs font-bold rounded-lg transition text-slate-500 hover:text-slate-800";
     }
 
-    // 5. Ẩn/Hiện nhóm khung giờ
     const meetingButtons = document.querySelectorAll('.meeting-slot');
     const studyButtons = document.querySelectorAll('.study-slot');
 
@@ -70,25 +72,22 @@ function switchRoomType(type) {
 // EVENT LISTENER CHO KHUNG GIỜ
 // ==========================================
 function initTimeSlotListener() {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
+    if (!isDetailPage) return;
     
     const grid = document.getElementById('timeslot-grid');
     if (!grid) return;
 
     grid.addEventListener('click', function (e) {
         if (e.target.classList.contains('timeslot-btn')) {
-            // Bỏ chọn tất cả nút khác
             document.querySelectorAll('.timeslot-btn').forEach(btn => {
                 btn.classList.remove('border-teal-600', 'bg-teal-600', 'text-white');
                 btn.removeAttribute('data-selected');
             });
 
-            // Chọn nút hiện tại
             e.target.classList.add('border-teal-600', 'bg-teal-600', 'text-white');
             e.target.setAttribute('data-selected', 'true');
             selectedTimeSlot = e.target.getAttribute('data-slot');
 
-            // Reset danh sách phòng và lựa chọn phòng
             selectedSeat = null;
             document.querySelectorAll('.room-card').forEach(card => {
                 card.classList.remove('border-teal-500', 'bg-teal-50/30');
@@ -103,18 +102,16 @@ function initTimeSlotListener() {
 // KIỂM TRA PHÒNG CÓ SẴN
 // ==========================================
 async function checkAvailableSlots() {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
-    
+    if (!isDetailPage) return;
+
     const container = document.getElementById('available-slots-container');
     const listGrid = document.getElementById('available-slots-list');
 
     if (!container || !listGrid) return;
 
-    // Lấy dữ liệu từ giao diện
     const branchId = document.querySelector('[data-branch-id]')?.getAttribute('data-branch-id');
     const date = document.getElementById('booking-date')?.value;
 
-    // Kiểm tra khung giờ đã chọn
     if (!selectedTimeSlot) {
         alert("Vui lòng chọn khung giờ trước khi xem!");
         return;
@@ -125,30 +122,33 @@ async function checkAvailableSlots() {
         return;
     }
 
+    const token = localStorage.getItem('token');
+
     listGrid.innerHTML = '<p class="text-slate-500 text-sm">Đang tải...</p>';
 
     try {
-        const res = await fetch('/spaces/check', {
+        const res = await fetch('/api/customers/bookings/check-availability', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
             body: JSON.stringify({
-                branchId: branchId,
-                date: date,
+                branchId,
+                date,
                 timeSlot: selectedTimeSlot,
-                roomType: currentRoomType // 'meeting' hoặc 'desk'
+                roomType: currentRoomType
             })
         });
 
         const data = await res.json();
 
         if (!res.ok) {
-            listGrid.innerHTML = `<p class="text-red-500 text-sm">${data.error || 'Lỗi hệ thống'}</p>`;
+            listGrid.innerHTML = `<p class="text-red-500 text-sm">${data.error || data.message || 'Lỗi hệ thống'}</p>`;
             return;
         }
 
-        // Render danh sách phòng từ dữ liệu thực
-        // ... (phía trên giữ nguyên)
-        if (data.spaces.length === 0) {
+        if (!data.spaces || data.spaces.length === 0) {
             listGrid.innerHTML = '<p class="text-slate-400 text-xs italic">Không còn phòng trống trong khung giờ này.</p>';
         } else {
             listGrid.innerHTML = data.spaces.map(space => `
@@ -156,22 +156,22 @@ async function checkAvailableSlots() {
                     data-room-id="${space._id}"
                     data-room-price="${space.PricePerHour || 0}"
                     onclick="selectRoomCardDetail(this)">
-                    
                     <div class="flex-1 min-w-0">
                         <div class="font-bold text-sm text-slate-800">${space.Name}</div>
                         <div class="text-xs font-black text-teal-700 mt-0.5">
                             ${Number(space.PricePerHour || 0).toLocaleString('vi-VN')}đ/giờ
                         </div>
                         <div class="text-[10px] text-emerald-600 font-black uppercase mt-1.5 flex items-center gap-1">
-                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span> Sẵn sàng
+                            <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
+                            Sẵn sàng
                         </div>
                     </div>
-
-                    <button type="button"
+                    <button
+                        type="button"
                         class="text-[10px] px-3 py-1.5 rounded-lg bg-teal-50 text-teal-700 font-bold shrink-0 hover:bg-teal-100 transition"
                         onclick="openModalSafe(
-                            '${space.Name}', 
-                            '${space.PricePerHour || 0}', 
+                            '${space.Name}',
+                            '${space.PricePerHour || 0}',
                             '${encodeURIComponent((space.Images || []).join(','))}',
                             '${encodeURIComponent(space.Description || '')}',
                             '${space.Capacity || 0}',
@@ -182,6 +182,7 @@ async function checkAvailableSlots() {
                 </div>
             `).join('');
         }
+
         container.classList.remove('hidden');
 
     } catch (err) {
@@ -191,23 +192,20 @@ async function checkAvailableSlots() {
 }
 
 // ==========================================
-// CHỌN PHÒNG - Rename để tránh xung đột
+// CHỌN PHÒNG
 // ==========================================
 function selectRoomCardDetail(element) {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
+    if (!isDetailPage) return;
     
-    // Bỏ chọn các card khác
     document.querySelectorAll('.room-card').forEach(card => {
         card.classList.remove('border-teal-500', 'bg-teal-50/30');
     });
     
-    // Chọn card hiện tại
     element.classList.add('border-teal-500', 'bg-teal-50/30');
 
     selectedSeat = element.getAttribute('data-room-id');
     const pricePerHour = parseInt(element.getAttribute('data-room-price')) || 0;
     
-    // Tính toán giá dựa trên thời gian chọn
     if (selectedTimeSlot) {
         const [startStr, endStr] = selectedTimeSlot.split(' - ');
         const start = new Date(`2000-01-01T${startStr}:00`);
@@ -215,10 +213,9 @@ function selectRoomCardDetail(element) {
         const hours = (end - start) / (1000 * 60 * 60);
         
         currentPrices.total = Math.round(pricePerHour * hours);
-        currentPrices.deposit = Math.round(currentPrices.total * 0.3); // 30% tiền cọc
+        currentPrices.deposit = Math.round(currentPrices.total * 0.3);
     }
 
-    // Hiển thị tóm tắt đặt chỗ
     const summary = document.getElementById('booking-summary');
     if (summary) {
         summary.classList.remove('hidden');
@@ -227,64 +224,46 @@ function selectRoomCardDetail(element) {
 }
 
 // ==========================================
-// XỬ LÝ THANH TOÁN
+// XỬ LÝ THANH TOÁN - CHỈ LƯU THÔNG TIN, CHƯA TẠO BOOKING
 // ==========================================
 async function checkAuthAndGoToPayment() {
-    
-    if (!selectedSeat) {
-        alert("Vui lòng chọn phòng!");
-        return;
-    }
+    if (!selectedSeat) { alert("Vui lòng chọn phòng!"); return; }
+    if (!selectedTimeSlot) { alert("Vui lòng chọn khung giờ!"); return; }
 
-    if (!selectedTimeSlot) {
-        alert("Vui lòng chọn khung giờ!");
-        return;
-    }
+    const [startStr, endStr] = selectedTimeSlot.split(' - ');
+    const date = document.getElementById('booking-date').value;
+    const branchId = document.querySelector('[data-branch-id]')?.getAttribute('data-branch-id');
 
-    try {
-        // Parse thời gian từ selectedTimeSlot (format: "07:00 - 10:00")
-        const [startStr, endStr] = selectedTimeSlot.split(' - ');
-        const date = document.getElementById('booking-date').value;
-        const startTime = new Date(`${date}T${startStr}:00`);
-        const endTime = new Date(`${date}T${endStr}:00`);
+    sessionStorage.setItem('pendingBooking', JSON.stringify({
+        spaceId: selectedSeat,
+        startTime: new Date(`${date}T${startStr}:00+07:00`).toISOString(),
+        endTime: new Date(`${date}T${endStr}:00+07:00`).toISOString(),
+        deposit: currentPrices.deposit,
+        total: currentPrices.total,
+        branchId
+    }));
 
-        const res = await fetch('/booking/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                userId: typeof currentUserId !== 'undefined' ? currentUserId : null,
-                spaceId: selectedSeat,
-                startTime: startTime.toISOString(),
-                endTime: endTime.toISOString(),
-                paymentType: 'deposit'
-            })
-        });
+    window.location.href = `/payment?branchId=${branchId}`;
+}
 
-        const data = await res.json();
-
-        if (!res.ok) {
-            alert(data.error || 'Lỗi hệ thống');
-            return;
-        }
-
-        alert("Đặt chỗ thành công!");
-        // Lấy bookingId để xác nhận thanh toán ở trang payment
-        const bookingId = data?.booking?._id || data?.bookingId || null;
-        if (bookingId) {
-            window.location.href = `/payment?bookingId=${bookingId}`;
-        } else {
-            window.location.href = '/payment';
-        }
-
-    } catch (err) {
-        console.error('Lỗi:', err);
-        alert("Lỗi kết nối server");
-    }
+// ==========================================
+// TRANG PAYMENT
+// ==========================================
+function goBackToDetail() {
+    const pending = JSON.parse(sessionStorage.getItem('pendingBooking') || '{}');
+    const branchId = pending.branchId || new URLSearchParams(window.location.search).get('branchId');
+    window.location.href = branchId ? `/detail?branchId=${branchId}` : '/';
 }
 
 function setPaymentType(type) {
     const area = document.getElementById('qr-area');
     if (!area) return;
+
+    selectedPaymentType = type;
+
+    const pending = JSON.parse(sessionStorage.getItem('pendingBooking') || '{}');
+    currentPrices.deposit = pending.deposit || 0;
+    currentPrices.total = pending.total || 0;
 
     area.classList.remove('hidden');
     document.getElementById('qr-placeholder')?.classList.add('hidden');
@@ -300,39 +279,63 @@ function setPaymentType(type) {
 }
 
 async function handleFinalSuccess() {
+    const token = localStorage.getItem('token');
+    if (!token) { alert('Vui lòng đăng nhập!'); return; }
+
+    const pending = JSON.parse(sessionStorage.getItem('pendingBooking') || '{}');
+    if (!pending.spaceId) { alert('Không có thông tin đặt chỗ!'); return; }
+
     try {
-        // bookingId cần được truyền từ trang payment (hidden input hoặc query string)
-        const bookingIdEl = document.getElementById('bookingId');
-        const bookingId = bookingIdEl?.value || new URLSearchParams(window.location.search).get('bookingId');
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userId = payload.userId || payload.id || payload._id;
 
-        if (!bookingId) {
-            showToast('Thiếu bookingId, không thể xác nhận thanh toán!');
-            return;
-        }
-
-        const token = localStorage.getItem('token');
-
-        const res = await fetch('/api/customers/booking/confirm', {
+        // Bước 1: Tạo booking
+        const createRes = await fetch(`/api/customers/${userId}/bookings`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                spaceId: pending.spaceId,
+                startTime: pending.startTime,
+                endTime: pending.endTime,
+                paymentType: selectedPaymentType
+            })
+        });
+
+        const createData = await createRes.json();
+        if (!createRes.ok) {
+            alert(createData.error || 'Đặt chỗ thất bại');
+            return;
+        }
+
+        const bookingId = createData.booking._id;
+
+        // Bước 2: Confirm payment ngay
+        const confirmRes = await fetch('/api/customers/booking/confirm', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({ bookingId })
         });
 
-        const data = await res.json();
-
-        if (!res.ok) {
-            alert(data.error || 'Xác nhận thanh toán thất bại');
+        const confirmData = await confirmRes.json();
+        if (!confirmRes.ok) {
+            alert(confirmData.error || 'Xác nhận thanh toán thất bại');
             return;
         }
 
-        showToast('Thanh toán thành công!');
-        setTimeout(() => window.location.href = '/history', 1000);
-    } catch (e) {
-        console.error(e);
-        alert('Lỗi kết nối server');
+        // Bước 3: Dọn sessionStorage và chuyển trang
+        sessionStorage.removeItem('pendingBooking');
+        alert('Thanh toán thành công!');
+        window.location.href = '/history';
+
+    } catch (err) {
+        console.error('Lỗi:', err);``
+        alert('Lỗi kết nối server: ' + err.message);
     }
 }
 
@@ -357,8 +360,6 @@ function openRoomModal(name, price, imageUrlsString, description, capacity, amen
     const nameEl = document.getElementById('modal-room-name');
     const priceEl = document.getElementById('modal-room-price');
     const imgEl = document.getElementById('modal-room-img');
-    
-    // Các phần tử mới
     const descEl = document.getElementById('modal-room-desc');
     const capacityEl = document.getElementById('modal-room-capacity');
     const amenitiesEl = document.getElementById('modal-room-amenities');
@@ -369,12 +370,9 @@ function openRoomModal(name, price, imageUrlsString, description, capacity, amen
         .filter(url => url.length > 0);
     currentImageIndex = 0;
 
-    // Gán dữ liệu
     if (nameEl) nameEl.textContent = name;
     if (priceEl) priceEl.textContent = Number(price).toLocaleString('vi-VN') + 'đ/giờ';
     if (imgEl) imgEl.alt = name;
-    
-    // Gán dữ liệu mới
     if (descEl) descEl.textContent = description || "Không có mô tả chi tiết.";
     if (capacityEl) capacityEl.textContent = `Sức chứa: ${capacity || 0} người`;
     
@@ -392,7 +390,7 @@ function openRoomModal(name, price, imageUrlsString, description, capacity, amen
 }
 
 function closeRoomModal() {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
+    if (!isDetailPage) return;
     
     const modal = document.getElementById('modal-room-detail');
     if (modal) modal.classList.add('hidden');
@@ -421,7 +419,7 @@ function updateModalImageUI() {
 }
 
 function changeRoomImage(step) {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
+    if (!isDetailPage) return;
     
     const newIndex = currentImageIndex + step;
     if (newIndex < 0 || newIndex >= roomImages.length) return;
@@ -433,13 +431,30 @@ function changeRoomImage(step) {
 // KHỞI TẠO KHI TẢI TRANG
 // ==========================================
 document.addEventListener('DOMContentLoaded', function () {
-    if (!isDetailPage) return; // Chỉ chạy trên trang detail
+    if (isDetailPage) {
+        loadBranchReviews();
+        initTimeSlotListener();
+    }
 
-    // 1) Load reviews cho branch
-    loadBranchReviews();
+    if (isPaymentPage) {
+        const pending = JSON.parse(sessionStorage.getItem('pendingBooking') || '{}');
 
-    // 2) Khởi tạo event listener cho khung giờ
-    initTimeSlotListener();
+        if (!pending.spaceId) {
+            alert('Không có thông tin đặt chỗ, vui lòng thử lại!');
+            window.location.href = '/';
+            return;
+        }
+
+        const depositEl = document.getElementById('pay-txt-30');
+        const totalEl = document.getElementById('pay-txt-100');
+
+        if (depositEl) depositEl.textContent = Number(pending.deposit || 0).toLocaleString('vi-VN') + 'đ';
+        if (totalEl) totalEl.textContent = Number(pending.total || 0).toLocaleString('vi-VN') + 'đ';
+    }
+
+    if (isProfilePage) {
+        loadMyProfile();
+    }
 });
 
 // ==========================================
@@ -450,7 +465,6 @@ async function loadBranchReviews() {
     if (!container) return;
 
     const branchId = document.querySelector('[data-branch-id]')?.getAttribute('data-branch-id');
-    console.log('[reviews] branchId:', branchId);
     if (!branchId) {
         container.innerHTML = '<div class="text-red-500 text-sm">Thiếu branchId (không lấy được từ UI).</div>';
         return;
@@ -459,7 +473,7 @@ async function loadBranchReviews() {
     container.innerHTML = '<div class="text-slate-500 text-sm">Đang tải đánh giá...</div>';
 
     try {
-        const res = await fetch(`/api/customers/branches/${encodeURIComponent(branchId)}/reviews`);
+        const res = await fetch(`/api/customers/branch/${encodeURIComponent(branchId)}/reviews`);
         const data = await res.json();
 
         if (!res.ok) {
@@ -514,3 +528,110 @@ function escapeHtml(str) {
         .replace(/'/g, '&#039;');
 }
 
+// ==========================================
+// TRANG PROFILE
+// ==========================================
+async function loadMyProfile() {
+    const token = localStorage.getItem('token');
+    if (!token) { window.location.href = '/login'; return; }
+
+    try {
+        const res = await fetch('/api/customers/me/profile', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await res.json();
+
+        if (!res.ok) { alert(data.error || 'Lỗi tải hồ sơ'); return; }
+
+        const { user, profile } = data;
+
+        const fullnameEl = document.getElementById('input-fullname');
+        const emailEl = document.getElementById('input-email');
+        const phoneEl = document.getElementById('input-phone');
+        const bankNameEl = document.getElementById('input-bank-name');
+        const bankNumberEl = document.getElementById('input-bank-number');
+        const displayNameEl = document.getElementById('profile-display-name');
+        const avatarEl = document.getElementById('profile-avatar-preview');
+
+        if (fullnameEl) fullnameEl.value = user.FullName || '';
+        if (emailEl) emailEl.value = user.Email || '';
+        if (phoneEl) phoneEl.value = profile?.Phone || '';
+        if (bankNameEl) bankNameEl.value = profile?.BankName || '';
+        if (bankNumberEl) bankNumberEl.value = profile?.BankNumber || '';
+        if (displayNameEl) displayNameEl.textContent = user.FullName || '--';
+
+        if (avatarEl) {
+            avatarEl.src = profile?.Avatar
+                ? profile.Avatar
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(user.FullName || 'User')}&size=200`;
+        }
+
+    } catch (err) {
+        console.error(err);
+        alert('Lỗi kết nối server');
+    }
+}
+
+async function saveMyProfile() {
+    const token = localStorage.getItem('token');
+    if (!token) { alert('Vui lòng đăng nhập!'); return; }
+
+    const formData = new FormData();
+    formData.append('FullName', document.getElementById('input-fullname').value.trim());
+    formData.append('Phone', document.getElementById('input-phone').value.trim());
+    formData.append('BankName', document.getElementById('input-bank-name').value.trim());
+    formData.append('BankNumber', document.getElementById('input-bank-number').value.trim());
+
+    const avatarFile = document.getElementById('input-avatar')?.files[0];
+    if (avatarFile) formData.append('customerAvatar', avatarFile);
+
+    try {
+        const res = await fetch('/api/customers/me/profile', {
+            method: 'PUT',
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
+        });
+
+        const data = await res.json();
+        if (!res.ok) { alert(data.error || 'Lưu thất bại'); return; }
+
+        // Cập nhật phần hồ sơ
+        document.getElementById('profile-display-name').textContent = data.user.FullName || '--';
+        if (data.profile?.Avatar) {
+            document.getElementById('profile-avatar-preview').src = data.profile.Avatar;
+        }
+
+        // Cập nhật phần header trên cùng
+        const headerNameEl = document.getElementById('user-display-name');
+        const headerAvatarEl = document.getElementById('header-avatar-preview');
+
+        if (headerNameEl) headerNameEl.textContent = data.user.FullName || 'Người dùng';
+        if (headerAvatarEl) {
+            headerAvatarEl.src = data.profile?.Avatar
+                ? data.profile.Avatar
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(data.user.FullName || 'User')}&background=0D8B8B&color=fff`;
+        }
+
+        // Cập nhật localStorage cho đúng key mà main.js đang dùng
+        localStorage.setItem('userName', data.user.FullName || '');
+        if (data.profile?.Avatar) {
+            localStorage.setItem('userAvatar', data.profile.Avatar);
+        }
+
+        alert('Đã lưu thông tin thành công!');
+
+    } catch (err) {
+        console.error(err);
+        alert('Lỗi kết nối server');
+    }
+}
+
+function previewProfileImage(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const avatarEl = document.getElementById('profile-avatar-preview');
+        if (avatarEl) avatarEl.src = e.target.result;
+    };
+    reader.readAsDataURL(input.files[0]);
+}

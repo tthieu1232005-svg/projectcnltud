@@ -24,53 +24,28 @@
             <div class="grid md:grid-cols-2 gap-4 text-sm">
 
                 <div>
-                    <span class="font-bold text-slate-700">
-                        📍 Địa chỉ
-                    </span>
-
-                    <p class="text-slate-600 mt-1">
-                        <%= branch.Address %>
-                    </p>
+                    <span class="font-bold text-slate-700">📍 Địa chỉ</span>
+                    <p class="text-slate-600 mt-1"><%= branch.Address %></p>
                 </div>
 
                 <div>
-                    <span class="font-bold text-slate-700">
-                        🏙 Khu vực
-                    </span>
-
-                    <p class="text-slate-600 mt-1">
-                        <%= branch.District %>, <%= branch.City %>
-                    </p>
+                    <span class="font-bold text-slate-700">🏙 Khu vực</span>
+                    <p class="text-slate-600 mt-1"><%= branch.District %>, <%= branch.City %></p>
                 </div>
 
                 <div>
-                    <span class="font-bold text-slate-700">
-                        🕒 Giờ hoạt động
-                    </span>
-
-                    <p class="text-slate-600 mt-1">
-                        <%= branch.OpeningTime %> - <%= branch.ClosingTime %>
-                    </p>
+                    <span class="font-bold text-slate-700">🕒 Giờ hoạt động</span>
+                    <p class="text-slate-600 mt-1"><%= branch.OpeningTime %> - <%= branch.ClosingTime %></p>
                 </div>
 
                 <div>
-                    <span class="font-bold text-slate-700">
-                        ⭐ Đánh giá
-                    </span>
-
-                    <p class="text-amber-500 font-semibold mt-1">
-                        <%= branch.RatingAvg %>/5
-                    </p>
+                    <span class="font-bold text-slate-700">⭐ Đánh giá</span>
+                    <p class="text-amber-500 font-semibold mt-1"><%= branch.RatingAvg %>/5</p>
                 </div>
 
                 <div>
-                    <span class="font-bold text-slate-700">
-                        📌 Trạng thái
-                    </span>
-
-                    <p class="text-green-600 font-semibold mt-1">
-                        <%= branch.Status %>
-                    </p>
+                    <span class="font-bold text-slate-700">📌 Trạng thái</span>
+                    <p class="text-green-600 font-semibold mt-1"><%= branch.Status %></p>
                 </div>
 
             </div>
@@ -78,75 +53,17 @@
 
         <!-- ĐÁNH GIÁ KHÁCH HÀNG -->
         <div id="reviews-section" class="mt-8 bg-white p-8 rounded-3xl shadow-sm border border-slate-200">
-            <h3 class="font-bold text-xl mb-4 text-slate-800 uppercase tracking-tight">Đánh giá khách hàng</h3>
+            <h3 class="font-bold text-xl mb-4 text-slate-800 uppercase tracking-tight">Đánh giá từ khách hàng</h3>
 
-            <div class="mb-6 pb-6 border-b border-dashed border-slate-200">
-                <form id="review-form">
-                    <div class="mb-3">
-                        <label class="block text-xs font-bold text-slate-600 mb-2">
-                            Đánh giá của bạn
-                        </label>
+            
 
-                        <div class="flex flex-wrap gap-4">
-                            <label class="flex items-center gap-1 text-sm cursor-pointer font-medium text-amber-500">
-                                <input type="radio" name="rating" value="1" class="accent-teal-600">★
-                            </label>
-
-                            <label class="flex items-center gap-1 text-sm cursor-pointer font-medium text-amber-500">
-                                <input type="radio" name="rating" value="2" class="accent-teal-600">★★
-                            </label>
-
-                            <label class="flex items-center gap-1 text-sm cursor-pointer font-medium text-amber-500">
-                                <input type="radio" name="rating" value="3" class="accent-teal-600">★★★
-                            </label>
-
-                            <label class="flex items-center gap-1 text-sm cursor-pointer font-medium text-amber-500">
-                                <input type="radio" name="rating" value="4" class="accent-teal-600">★★★★
-                            </label>
-
-                            <label class="flex items-center gap-1 text-sm cursor-pointer font-medium text-amber-500">
-                                <input type="radio" name="rating" value="5" class="accent-teal-600" checked>★★★★★
-                            </label>
-                        </div>
-                    </div>
-
-                    <textarea
-                        class="w-full bg-slate-50 border border-slate-100 rounded-xl p-4 text-sm outline-none focus:border-teal-500 focus:bg-white transition mb-3"
-                        rows="3"
-                        placeholder="Chia sẻ trải nghiệm của bạn về không gian này..."></textarea>
-
-                    <div class="flex justify-end">
-                        <button
-                            type="button"
-                            class="bg-teal-600 text-white px-6 py-2.5 rounded-xl font-bold text-xs uppercase tracking-widest hover:bg-teal-700 transition shadow-md">
-                            Gửi đánh giá
-                        </button>
-                    </div>
-                </form>
-            </div>
-
-            <div class="space-y-4" id="review-items-list">
-                <div class="border-b border-slate-100 pb-4">
-                    <div class="flex justify-between font-bold text-xs text-slate-400">
-                        <span>Nguyễn Văn An</span>
-                        <span>20/03/2026</span>
-                    </div>
-
-                    <div class="flex text-amber-500 text-xs my-1">
-                        ★★★★☆
-                    </div>
-
-                    <p class="text-sm text-slate-600 italic">
-                        "Yên tĩnh, wifi nhanh."
-                    </p>
-                </div>
-            </div>
+            <!-- JS sẽ render reviews vào đây -->
+            <div class="space-y-4" id="review-items-list"></div>
         </div>
 
     </div>
 
     <!-- PHẦN ĐẶT CHỖ BÊN PHẢI -->
-    
     <div class="w-full lg:w-80">
         <div class="bg-white p-6 rounded-3xl shadow-lg border border-slate-100 sticky top-24">
             <h3 class="font-black text-xl mb-4 border-b pb-2 text-teal-800 uppercase tracking-tighter">Đặt chỗ</h3>
@@ -184,37 +101,59 @@
                 </div>
 
                 <!-- CHỌN KHUNG GIỜ -->
-                <div>
-                    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Chọn khung giờ</label>
-                    <div id="timeslot-grid" class="grid grid-cols-2 gap-2">
-                        <% 
-                            const meetingSlots = ["07:00 - 10:00", "10:15 - 13:15", "13:30 - 18:30", "18:45 - 21:45"];
-                            const studySlots = ["07:00 - 08:00", "08:15 - 10:15", "10:30 - 13:30", "13:45 - 17:45", "18:00 - 22:00"];
-                        %>
+<div>
+    <label class="block text-[10px] font-black text-slate-400 uppercase mb-2">Chọn khung giờ</label>
+    <div id="timeslot-grid" class="grid grid-cols-2 gap-2">
+        <% 
+            // Phòng họp: 2 tiếng làm + 15p dọn dẹp (slot dài 2h15p)
+            const meetingSlots = [
+                "07:00 - 09:00",
+                "09:15 - 11:15",
+                "11:30 - 13:30",
+                "13:45 - 15:45",
+                "16:00 - 18:00",
+                "18:15 - 20:15"
+            ];
 
-                        <!-- Khung giờ phòng họp -->
-                        <% meetingSlots.forEach((slot) => { %>
-                            <button
-                                type="button"
-                                class="timeslot-btn meeting-slot border border-slate-200 rounded-xl text-xs font-bold px-2 py-2 text-slate-700 transition hover:border-teal-500 hover:bg-teal-50 focus:outline-none"
-                                data-slot="<%= slot %>">
-                                <%= slot %>
-                            </button>
-                        <% }) %>
+            // Phòng học: 1 tiếng làm + 15p dọn dẹp (slot dài 1h15p)
+            const studySlots = [
+                "07:00 - 08:00",
+                "08:15 - 09:15",
+                "09:30 - 10:30",
+                "10:45 - 11:45",
+                "12:00 - 13:00",
+                "13:15 - 14:15",
+                "14:30 - 15:30",
+                "15:45 - 16:45",
+                "17:00 - 18:00",
+                "18:15 - 19:15",
+                "19:30 - 20:30",
+                "20:45 - 21:45"
+            ];
+        %>
 
-                        <!-- Khung giờ phòng học -->
-                        <% studySlots.forEach((slot) => { %>
-                            <button
-                                type="button"
-                                class="timeslot-btn study-slot hidden border border-slate-200 rounded-xl text-xs font-bold px-2 py-2 text-slate-700 transition hover:border-teal-500 hover:bg-teal-50 focus:outline-none"
-                                data-slot="<%= slot %>">
-                                <%= slot %>
-                            </button>
-                        <% }) %>
-                    </div>
+        <!-- Khung giờ phòng họp -->
+        <% meetingSlots.forEach((slot) => { %>
+            <button
+                type="button"
+                class="timeslot-btn meeting-slot border border-slate-200 rounded-xl text-xs font-bold px-2 py-2 text-slate-700 transition hover:border-teal-500 hover:bg-teal-50 focus:outline-none"
+                data-slot="<%= slot %>">
+                <%= slot %>
+            </button>
+        <% }) %>
 
-                    <p class="text-[10px] text-slate-400 italic mt-2 leading-tight">* Lưu ý: Giữa các ca có 15 phút dọn dẹp và chuẩn bị không gian.</p>
-                </div>
+        <!-- Khung giờ phòng học -->
+        <% studySlots.forEach((slot) => { %>
+            <button
+                type="button"
+                class="timeslot-btn study-slot hidden border border-slate-200 rounded-xl text-xs font-bold px-2 py-2 text-slate-700 transition hover:border-teal-500 hover:bg-teal-50 focus:outline-none"
+                data-slot="<%= slot %>">
+                <%= slot %>
+            </button>
+        <% }) %>
+    </div>
+    <p class="text-[10px] text-slate-400 italic mt-2 leading-tight">* Lưu ý: Giữa các ca có 15 phút dọn dẹp và chuẩn bị không gian.</p>
+</div>
 
                 <!-- NÚT KIỂM TRA TÌNH TRẠNG -->
                 <button 
@@ -228,14 +167,12 @@
             <!-- DANH SÁCH PHÒNG CÓ SẴN -->
             <div id="available-slots-container" class="hidden mt-6 space-y-3">
                 <p class="text-[10px] font-black text-slate-400 uppercase border-t pt-4 mb-2">Vị trí còn trống:</p>
-                <div id="available-slots-list" class="flex flex-col gap-3">
-                    <!-- Phòng sẽ được render từ JavaScript -->
-                </div>
+                <div id="available-slots-list" class="flex flex-col gap-3"></div>
             </div>
 
             <!-- TÓM TẮT ĐẶT CHỖ -->
             <div id="booking-summary" class="hidden mt-6 pt-6 border-t border-dashed border-slate-100">
-                <div id="val-deposit" class="text-teal-700 font-black text-center mb-4 text-xl">Cọc: 150.000đ</div>
+                <div id="val-deposit" class="text-teal-700 font-black text-center mb-4 text-xl">Cọc: 0đ</div>
                 <button 
                     type="button"
                     onclick="checkAuthAndGoToPayment()" 
@@ -253,7 +190,6 @@
         <div class="relative group">
             <img id="modal-room-img" src="" alt="" class="w-full h-56 object-cover">
             
-            <!-- Nút đóng modal -->
             <button
                 type="button"
                 onclick="closeRoomModal()"
@@ -262,7 +198,6 @@
                 &times;
             </button>
             
-            <!-- Nút ảnh trước -->
             <button
                 type="button"
                 id="modal-btn-prev"
@@ -272,7 +207,6 @@
                 &lt;
             </button>
             
-            <!-- Nút ảnh sau -->
             <button
                 type="button"
                 id="modal-btn-next"
@@ -282,7 +216,6 @@
                 &gt;
             </button>
             
-            <!-- Bộ đếm ảnh -->
             <span
                 id="modal-img-counter"
                 class="absolute bottom-3 left-3 z-10 bg-black/50 text-white text-[10px] font-bold rounded-lg px-2 py-1">
@@ -290,7 +223,6 @@
             </span>
         </div>
 
-        <!-- Thông tin phòng -->
         <div class="p-6 md:p-8">
             <h3 id="modal-room-name" class="font-black text-xl text-slate-800 uppercase tracking-tight mb-4">—</h3>
             <div class="p-4 bg-slate-50 rounded-2xl border border-slate-100 mb-4">
