@@ -32,6 +32,8 @@ async function handleLogin(event) {
             localStorage.setItem('userName', data.user.fullName); // Lưu tên để hiển thị trên UI
             localStorage.setItem('userId', data.user.id); // LƯU LẠI ID DỰ PHÒNG CHỐNG LỖI UI CŨ
             
+
+            document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
             // ĐIỀU HƯỚNG DỰA TRÊN VAI TRÒ (ROLE-BASED ROUTING)
             setTimeout(() => {
                 if (data.user.role === 'host') {

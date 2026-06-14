@@ -4,36 +4,43 @@ const router = express.Router();
 // Import Controller
 const hostController = require('../controllers/hostController');
 
-// Import Middleware bảo mật
+// Import Middleware
 const authMiddleware = require('../middlewares/authMiddleware');
 const upload = require('../middlewares/upload');
 
 // ====================================================================
-// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ REST API BÊN DƯỚI
+// BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ API HOST
 // Yêu cầu: Client phải gửi kèm Token hợp lệ trong Header
 // ====================================================================
 router.use(authMiddleware.verifyToken);
 
 // ====================================================================
-// 1. CÁC API THỐNG KÊ & HỒ SƠ 
-// Đã xóa tiền tố /api/ bị thừa. URL chuẩn sẽ là: /api/hosts/profile
+// 1. API HỒ SƠ & THỐNG KÊ
 // ====================================================================
 router.get('/dashboard-stats', hostController.getDashboardStatsAPI);
 router.get('/profile', hostController.getProfileAPI);
 router.put('/profile', upload.single('LogoFile'), hostController.updateProfileAPI);
 
 // ====================================================================
-// 2. CÁC API CƠ SỞ & KHÔNG GIAN
+// 2. QUẢN LÝ CƠ SỞ (BRANCHES) - CRUD
 // ====================================================================
 router.get('/branches', hostController.getHostBranches);
-router.get('/spaces', hostController.getHostSpaces);
-
-if (typeof hostController.createBranchAndSpaces === 'function') {
-  router.post('/branches', hostController.createBranchAndSpaces);
-}
+router.post('/branches', upload.single('image'), hostController.createBranch);
+router.put('/branches/:branchId', upload.single('image'), hostController.updateBranch);
 
 // ====================================================================
-// 3. CÁC API QUẢN LÝ ĐƠN HÀNG CỦA HOST
+// 3. QUẢN LÝ KHÔNG GIAN (SPACES) - CRUD
+// ====================================================================
+router.get('/spaces', hostController.getHostSpaces);
+router.get('/branches/:branchId/spaces', hostController.getBranchSpaces);
+router.post('/branches/:branchId/spaces', upload.single('image'), hostController.createSpace);
+router.put('/spaces/:spaceId', upload.single('image'), hostController.updateSpace);
+
+// Route gộp đặc biệt cho Wizard thêm mới
+router.post('/branches', upload.single('image'), hostController.createBranchAndSpaces);
+
+// ====================================================================
+// 4. QUẢN LÝ ĐƠN HÀNG (BOOKINGS)
 // ====================================================================
 router.get('/bookings', hostController.getHostBookings);
 router.put('/bookings/:bookingId/confirm', hostController.confirmBooking);

@@ -170,6 +170,7 @@ function renderMenu(currentRole) {
         else if (i.id.startsWith('admin_')) { 
                 expectedPath = '/admin/' + i.id.replace('admin_', '');
         }
+
         if (window.location.pathname === expectedPath) {
             d.classList.add('active');
         }
@@ -191,6 +192,7 @@ function logout() {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userId'); // Dọn dẹp cả ID dự phòng
+    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
     window.location.href = '/login';
 }
 

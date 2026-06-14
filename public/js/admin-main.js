@@ -127,6 +127,7 @@ function filterUsersList() {
     // Vẽ lại bảng với danh sách đã lọc
     renderUserTable(filteredUsers);
 }
+
 // Hàm này sẽ vẽ bảng danh sách người dùng dựa trên dữ liệu trả về từ API
 function renderUserTable(users) {
     const tbody = document.getElementById('user-table-body');

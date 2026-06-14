@@ -1,29 +1,39 @@
 // ==========================================
-// DỮ LIỆU VÀ TRẠNG THÁI
+// DỮ LIỆU VÀ TRẠNG THÁI (ĐÃ ĐƯỢC ĐỔI TÊN ĐỂ TRÁNH XUNG ĐỘT)
 // ==========================================
-let myBookingsCache = [];
-let filteredBookings = [];
-let currentFilterTimeType = 'all';
-let liveTimerInterval = null;
+var historyBookingsCache = [];
+var historyFilteredBookings = [];
+var historyFilterTimeType = 'all';
+var historyTimerInterval = null;
+
 // ==========================================
 // 1. GỌI API LẤY LỊCH SỬ ĐẶT CHỖ
 // ==========================================
 async function fetchCustomerHistory() {
     const userId = localStorage.getItem('userId');
     const token = localStorage.getItem('token');
-    if (!userId || !token) return;
+    
+    if (!userId || !token) {
+        document.getElementById('history-list').innerHTML = `<div class="text-center py-10 bg-rose-50 rounded-3xl border border-rose-100"><p class="text-rose-600 font-bold text-sm">Vui lòng đăng nhập để xem lịch sử.</p></div>`;
+        return;
+    }
 
     try {
         const res = await fetch(`/api/customers/${userId}/bookings`, {
             headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
+        
         if (res.ok) {
-            myBookingsCache = data.bookings || [];
+            historyBookingsCache = data.bookings || [];
             applyCustomerFilters();
+        } else {
+            // Nâng cấp: Hiển thị lỗi ra màn hình nếu API từ chối
+            document.getElementById('history-list').innerHTML = `<div class="text-center py-10 bg-rose-50 rounded-3xl border border-rose-100"><p class="text-rose-600 font-bold text-sm">Lỗi: ${data.error || 'Không thể tải dữ liệu'}</p></div>`;
         }
     } catch (error) {
         console.error("Lỗi lấy dữ liệu:", error);
+        document.getElementById('history-list').innerHTML = `<div class="text-center py-10 bg-rose-50 rounded-3xl border border-rose-100"><p class="text-rose-600 font-bold text-sm">Lỗi kết nối máy chủ, vui lòng thử lại sau.</p></div>`;
     }
 }
 
@@ -70,15 +80,13 @@ function setupFilters() {
     timeOptions.forEach(btn => {
         btn.addEventListener('click', () => {
             const type = btn.getAttribute('data-value');
-            currentFilterTimeType = type;
+            historyFilterTimeType = type;
 
-            // === THÊM ĐOẠN CODE NÀY ĐỂ ĐỔI MÀU ===
-            // 1. Quét qua tất cả các nút, đưa về màu xám hết
             timeOptions.forEach(b => {
                 b.classList.remove('text-teal-600');
                 b.classList.add('text-slate-700');
             });
-           
+            
             timeMenu.classList.add('opacity-0', 'scale-95');
             setTimeout(() => { timeMenu.classList.add('hidden'); }, 200);
 
@@ -98,10 +106,10 @@ function setupFilters() {
 
     if (d1) {
         d1.addEventListener('change', () => {
-            if (currentFilterTimeType === 'specific') {
+            if (historyFilterTimeType === 'specific') {
                 timeText.textContent = `Lọc: ${formatDateVN(d1.value)}`;
                 applyCustomerFilters();
-            } else if (currentFilterTimeType === 'range') {
+            } else if (historyFilterTimeType === 'range') {
                 setTimeout(() => {
                     try { d2.showPicker(); } catch (e) { d2.focus(); }
                 }, 100);
@@ -111,7 +119,7 @@ function setupFilters() {
 
     if (d2) {
         d2.addEventListener('change', () => {
-            if (currentFilterTimeType === 'range') {
+            if (historyFilterTimeType === 'range') {
                 timeText.textContent = `${formatDateVN(d1.value)} - ${formatDateVN(d2.value)}`;
                 applyCustomerFilters();
             }
@@ -124,12 +132,12 @@ function setupFilters() {
 }
 
 function applyCustomerFilters() {
-    const type = currentFilterTimeType; 
+    const type = historyFilterTimeType; 
     const d1 = document.getElementById('filter-date-1')?.value;
     const d2 = document.getElementById('filter-date-2')?.value;
     const keyword = document.getElementById('filter-keyword')?.value.trim().toLowerCase();
 
-    filteredBookings = myBookingsCache.filter(b => {
+    historyFilteredBookings = historyBookingsCache.filter(b => {
         let matchKw = true;
         if (keyword && keyword !== '') {
             const id = b._id.toLowerCase();
@@ -151,7 +159,7 @@ function applyCustomerFilters() {
         return matchKw && matchTime;
     });
 
-    renderCustomerBookings(filteredBookings);
+    renderCustomerBookings(historyFilteredBookings);
 }
 
 // ==========================================
@@ -179,12 +187,10 @@ function renderCustomerBookings(list) {
         const dateStr = start.toLocaleDateString('vi-VN');
         const timeStr = `${start.getHours()}:${String(start.getMinutes()).padStart(2,'0')} - ${end.getHours()}:${String(end.getMinutes()).padStart(2,'0')}`;
 
-        // KIỂM TRA HẾT GIỜ TỰ ĐỘNG
         let displayStatus = booking.Status || booking.status;
         const isExpired = !isNaN(end.getTime()) && (now >= end);
         if (displayStatus === 'in-use' && isExpired) displayStatus = 'completed';
 
-        // ĐỒNG HỒ ĐẾM NGƯỢC (Cho đơn Đang dùng)
         let timeWarningUI = '';
         if (displayStatus === 'in-use') {
             const timeDiff = end.getTime() - now.getTime();
@@ -196,14 +202,12 @@ function renderCustomerBookings(list) {
                 </div>`;
         }
 
-        // XỬ LÝ BADGE TRẠNG THÁI THEO YÊU CẦU
         let stBadge = '', stColor = '';
         let showBadge = true;
         if (displayStatus === 'pending') { stBadge = 'Chờ duyệt'; stColor = 'bg-amber-100 text-amber-700'; }
         else if (displayStatus === 'confirmed') { stBadge = 'Đã được duyệt'; stColor = 'bg-blue-100 text-blue-700'; }
         else if (displayStatus === 'in-use') { stBadge = 'Đang dùng'; stColor = 'bg-purple-100 text-purple-700'; }
         else if (displayStatus === 'completed') { 
-            // NẾU ĐÃ ĐÁNH GIÁ THÌ k hiển thị gì
             if (!booking.canReview) {
                 showBadge = false;
             } else {
@@ -221,7 +225,6 @@ function renderCustomerBookings(list) {
 
         const percent = total > 0 ? Math.round((deposit / total) * 100) : 0;
 
-        // NÚT HÀNH ĐỘNG
         let actionUI = `<button onclick="openDetailModal('${booking._id}')" class="w-full py-1 rounded-xl border-2 border-slate-200 text-slate-500 font-black text-[10px] uppercase hover:border-slate-400 transition whitespace-nowrap">Xem chi tiết</button>`;
         
         if (displayStatus === 'completed') {
@@ -234,6 +237,17 @@ function renderCustomerBookings(list) {
         }
 
         const displayName = space.Name || 'Không có thông tin phòng';
+        
+        // --- XỬ LÝ AN TOÀN BRANCH ID (CHỐNG LỖI ORPHAN DATA) ---
+        const branch = space.BranchID || null;
+        const actualBranchId = branch ? (branch._id || branch) : null;
+        
+        let titleHTML = '';
+        if (actualBranchId) {
+            titleHTML = `<a href="/detail?branchId=${actualBranchId}" class="text-lg font-black text-slate-800 hover:text-teal-600 transition tracking-tight">${displayName}</a>`;
+        } else {
+            titleHTML = `<a href="#" onclick="alert('Cơ sở này đã ngừng hoạt động hoặc bị xóa khỏi hệ thống.'); return false;" class="text-lg font-black text-slate-400 cursor-not-allowed tracking-tight" title="Cơ sở không khả dụng">${displayName}</a>`;
+        }
 
         return `
             <div class="bg-white rounded-3xl p-4 md:p-5 shadow-sm border border-slate-100 hover:shadow-lg transition flex flex-col md:flex-row gap-5 items-center">
@@ -243,10 +257,8 @@ function renderCustomerBookings(list) {
                 
                 <div class="flex-1 w-full">
                     <div class="flex justify-between items-start mb-1">
-                        <a href="/detail?spaceId=${space._id}" class="text-lg font-black text-slate-800 hover:text-teal-600 transition tracking-tight">
-                            ${displayName}
-                        </a>
-                        <span class="${stColor} px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ml-2">${stBadge}</span>
+                        ${titleHTML}
+                        <span class="${stColor} px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest whitespace-nowrap ml-2">${showBadge ? stBadge : ''}</span>
                     </div>
                     <div class="text-xs font-bold text-slate-500 mb-3">Mã phòng: ${space.SpaceCode || 'Không có thông tin'}</div>
                     
@@ -263,7 +275,6 @@ function renderCustomerBookings(list) {
                         <div class="text-[10px] font-black text-slate-400 uppercase mb-1">Tổng chi phí</div>
                         <div class="text-xl font-black text-slate-800">${total.toLocaleString('vi-VN')}đ</div>
                         <div class="text-[10px] font-bold text-amber-600 mt-1">Đã thanh toán: ${percent}%</div>
-                        
                     </div>
                     <div class="flex flex-col mt-auto w-full pt-1">
                         ${actionUI}
@@ -272,20 +283,19 @@ function renderCustomerBookings(list) {
             </div>`;
     }).join('');
 
-    startLiveTimers(); // Kích hoạt đồng hồ đếm ngược
+    startLiveTimers(); 
 }
 
 // ==========================================
 // 4. XỬ LÝ MODAL (POPUP) CHI TIẾT & ĐÁNH GIÁ
 // ==========================================
 function openDetailModal(id) {
-    const booking = myBookingsCache.find(b => b._id === id);
+    const booking = historyBookingsCache.find(b => b._id === id);
     if (!booking) return;
 
     const space = booking.SpaceID || {};
     const branch = space.BranchID || {}; 
     
-    // Hàm phụ trợ gán "Không có thông tin"
     const getVal = (val) => (val && val.trim() !== '') ? val : 'Không có thông tin';
 
     document.getElementById('md-img').src = (space.Images && space.Images.length > 0) ? space.Images[0] : 'https://images.unsplash.com/photo-1497366216548-37526070297c';
@@ -297,15 +307,12 @@ function openDetailModal(id) {
     
     document.getElementById('md-booking-id').textContent = '#' + booking._id.substring(booking._id.length - 6).toUpperCase();
     
-    // Thời gian đặt thực tế
     document.getElementById('md-time-created').textContent = new Date(booking.createdAt).toLocaleString('vi-VN');
 
-    // Thời gian sử dụng
     const start = new Date(booking.StartTime);
     const end = new Date(booking.EndTime);
     document.getElementById('md-time').textContent = `${start.toLocaleDateString('vi-VN')} | ${start.getHours()}:${String(start.getMinutes()).padStart(2,'0')} - ${end.getHours()}:${String(end.getMinutes()).padStart(2,'0')}`;
     
-    // Tiền bạc
     const total = booking.TotalAmount || 0;
     let deposit = booking.DepositAmount || 0;
 
@@ -324,31 +331,39 @@ function openDetailModal(id) {
     document.getElementById('md-deposit').textContent = deposit.toLocaleString('vi-VN') + 'đ';
     document.getElementById('md-remaining').textContent = (remaining > 0 ? remaining : 0).toLocaleString('vi-VN') + 'đ';
 
-    document.getElementById('md-link-detail').href = `/detail?spaceId=${space._id}`;
+    // --- XỬ LÝ AN TOÀN LINK CHI TIẾT TRONG MODAL ---
+    const actualBranchIdModal = branch ? (branch._id || branch) : null;
+    const linkDetailBtn = document.getElementById('md-link-detail');
+    
+    if (actualBranchIdModal && actualBranchIdModal !== '[object Object]') {
+        linkDetailBtn.href = `/detail?branchId=${actualBranchIdModal}`;
+        linkDetailBtn.onclick = null; // Xóa sự kiện chặn nếu có
+    } else {
+        linkDetailBtn.href = '#';
+        linkDetailBtn.onclick = function(e) {
+            e.preventDefault();
+            alert('Cơ sở này đã ngừng hoạt động hoặc bị xóa khỏi hệ thống.');
+        };
+    }
 
     const remainingBox = document.getElementById('md-remaining').parentElement;
     if (remaining > 0 && displayStatus !== 'cancelled') {
-        // Có nợ -> Hiện khung màu đỏ
         remainingBox.classList.remove('hidden');
         remainingBox.classList.add('flex');
         document.getElementById('md-remaining').textContent = remaining.toLocaleString('vi-VN') + 'đ';
     } else {
-        // Hết nợ hoặc Đơn bị hủy -> Tàng hình khung màu đỏ đi cho đỡ rối mắt
         remainingBox.classList.remove('flex');
         remainingBox.classList.add('hidden');
     }
 
-    // Hiển thị Modal (Thêm class flex để kích hoạt CSS căn giữa của Tailwind)
     const modal = document.getElementById('modal-booking-detail');
     modal.classList.remove('hidden');
     modal.classList.add('flex'); 
-
 }
 
-// HÀM ĐẾM NGƯỢC THỜI GIAN
 function startLiveTimers() {
-    if (liveTimerInterval) clearInterval(liveTimerInterval);
-    liveTimerInterval = setInterval(() => {
+    if (historyTimerInterval) clearInterval(historyTimerInterval);
+    historyTimerInterval = setInterval(() => {
         const containers = document.querySelectorAll('.live-countdown-container');
         let needToRefreshTable = false; 
 
@@ -375,7 +390,6 @@ function startLiveTimers() {
             }
         });
 
-        // Tự động load lại bảng nếu có đơn hết giờ
         if (needToRefreshTable) {
             applyCustomerFilters(); 
         }
@@ -418,9 +432,8 @@ window.addEventListener('DOMContentLoaded', () => {
     const historyListContainer = document.getElementById('history-list');
     if (historyListContainer) {
         setupFilters();
-        fetchCustomerHistory(); // Kích hoạt lấy dữ liệu DB
+        fetchCustomerHistory(); 
 
-        // Xử lý gửi Đánh giá
         const reviewForm = document.getElementById('review-form');
         if (reviewForm) {
             reviewForm.addEventListener('submit', async (e) => {
@@ -441,7 +454,7 @@ window.addEventListener('DOMContentLoaded', () => {
                     if (res.ok) {
                         alert(data.message);
                         closeModal('modal-review');
-                        fetchCustomerHistory(); // Refresh trang để cập nhật nút
+                        fetchCustomerHistory(); 
                     } else {
                         alert(data.error);
                     }
@@ -451,7 +464,6 @@ window.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Click sao đánh giá
         const starLabels = document.querySelectorAll('#star-container label');
         starLabels.forEach((label, idx) => {
             label.addEventListener('click', () => {
@@ -470,12 +482,7 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 if (typeof io !== 'undefined') {
     const socket = io();
-
-    // Lắng nghe sự kiện từ Backend
     socket.on('booking_status_updated', (data) => {
-        console.log('Đơn hàng cập nhật (Customer):', data);
-        
-        // GỌI ĐÚNG HÀM TẢI DỮ LIỆU CỦA FILE NÀY
         if (typeof fetchCustomerHistory === 'function') {
             fetchCustomerHistory();
         }

@@ -311,11 +311,12 @@ async function payRemainder(req, res) {
         await booking.save();
 
         const payment = await PaymentHistory.create({
-            bookingID: booking._id,
-            amount: remainingAmount,
-            paymentType: 'full_payment',
-            paymentMethod: req.body.paymentMethod || 'cash',
-            status: 'successful'
+            BookingID: booking._id,
+            CustomerID: userId,
+            Amount: remainingAmount,
+            PaymentType: 'full_payment',
+            PaymentMethod: req.body.paymentMethod || 'cash',
+            Status: 'successful'
         });
 
         return res.json({ message: 'Thanh toán phần còn lại thành công.', booking, payment });
@@ -378,15 +379,15 @@ async function getBranchReviews(req, res) {
 
         const reviews = await Review.find({ SpaceID: { $in: spaceIds } })
             .sort({ createdAt: -1 })
-            .populate('CustomerID', 'fullName avatarUrl')
+            .populate('CustomerID', 'FullName fullName avatarUrl Avatar')
             .lean();
 
         const formatted = reviews.map(r => ({
             _id: r._id,
             spaceId: r.SpaceID,
             customerId: r.CustomerID?._id,
-            customerName: r.CustomerID?.fullName || '',
-            customerAvatar: r.CustomerID?.avatarUrl || '',
+            customerName: r.CustomerID?.FullName || r.CustomerID?.fullName || '',
+            customerAvatar: r.CustomerID?.Avatar || r.CustomerID?.avatarUrl || '',
             rating: r.Rating,
             comment: r.Comment,
             createdAt: r.createdAt

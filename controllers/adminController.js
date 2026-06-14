@@ -3,6 +3,7 @@ const User = require('../models/User');
 const Booking = require('../models/Booking');
 const Branch = require('../models/Branch');
 const Space = require('../models/Space');
+
 // Hàm hỗ trợ gửi lỗi máy chủ về client (giúp code gọn hơn)
 function sendServerError(res, error) {
   console.error(error);
@@ -35,6 +36,7 @@ async function getAdminDashboard(req, res) {
     return sendServerError(res, error);
   }
 }
+
 // Hàm này có thể dùng để liệt kê tất cả người dùng (dành cho admin)
 async function listUsers(req, res) {
   try {
@@ -44,7 +46,6 @@ async function listUsers(req, res) {
     return sendServerError(res, error);
   }
 }
-
 
 // Hàm Khóa / Mở khóa tài khoản
 async function toggleUserStatus(req, res) {
@@ -74,8 +75,6 @@ async function toggleUserStatus(req, res) {
     return sendServerError(res, error);
   }
 }
-
-
 
 // Lấy danh sách các Host đang chờ phê duyệt
 async function getPendingHosts(req, res) {

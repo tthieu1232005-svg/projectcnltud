@@ -1,36 +1,29 @@
 // =======================================================
-// QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES) - MOCK DATA
+// QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
 // =======================================================
 
-const DEFAULT_FACILITIES = {
-    central: {
-        id: 'central',
-        name: 'WorkHub Central Q1',
-        address: '123 Lê Lợi, Phường Bến Thành, Quận 1',
-        note: 'Chi nhánh trung tâm nhất của hệ thống.',
-        image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800'
-    }
-};
-
-const DEFAULT_FACILITY_SPACES = {
-    central: [
-        { id: '101', type: 'Phòng họp', status: 'occupied', price: '250.000đ', image: '' },
-        { id: '102', type: 'Phòng họp', status: 'ready', price: '250.000đ', image: '' },
-        { id: 'A-01', type: 'Chỗ ngồi tự do', status: 'preparing', price: '35.000đ', image: '' },
-        { id: 'A-02', type: 'Chỗ ngồi tự do', status: 'suspended', price: '35.000đ', image: '' }
-    ]
-};
-
-let hostFacilities = {};
-let facilitySpacesData = {};
 let addFacilityDraft = { imageDataUrl: '', spaces: [] };
 let addFacilitySpaceCounter = 0;
+let currentBranchId = null;
+let currentSpaceId = null;
 
 const SPACE_STATUS_LABELS = {
-    ready: 'Sẵn sàng',
-    preparing: 'Đang chuẩn bị',
-    occupied: 'Có khách',
-    suspended: 'Tạm ngừng hoạt động'
+    available: "Sẵn sàng",
+    maintenance: "Bảo trì",
+    inactive: "Tạm ngừng hoạt động",
+    ready: "Sẵn sàng",
+    preparing: "Đang chuẩn bị",
+    occupied: "Có khách",
+    suspended: "Tạm ngừng hoạt động"
+};
+
+const CATEGORY_LABELS = {
+    meeting_room: "Phòng họp",
+    desk: "Chỗ ngồi tự do",
+    office: "Văn phòng",
+    event: "Sự kiện",
+    "Phòng họp": "Phòng họp",
+    "Chỗ ngồi tự do": "Chỗ ngồi tự do"
 };
 
 function escapeHtml(str) {
@@ -42,71 +35,19 @@ function escapeHtml(str) {
         .replace(/"/g, '&quot;');
 }
 
-function loadHostFacilitiesFromStorage() {
-    try {
-        const savedFac = localStorage.getItem('workhub_facilities');
-        const savedSpaces = localStorage.getItem('workhub_facility_spaces');
-        hostFacilities = savedFac ? JSON.parse(savedFac) : { ...DEFAULT_FACILITIES };
-        facilitySpacesData = savedSpaces ? JSON.parse(savedSpaces) : JSON.parse(JSON.stringify(DEFAULT_FACILITY_SPACES));
-    } catch {
-        hostFacilities = { ...DEFAULT_FACILITIES };
-        facilitySpacesData = JSON.parse(JSON.stringify(DEFAULT_FACILITY_SPACES));
-    }
-    if (typeof facilitySpaces !== 'undefined') {
-        Object.assign(facilitySpaces, facilitySpacesData);
+function applyImg(id, src) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (src) {
+      el.src = src;
+      el.classList.remove("hidden");
+    } else {
+      el.src = "";
+      el.classList.add("hidden");
     }
 }
 
-function persistHostFacilities() {
-    localStorage.setItem('workhub_facilities', JSON.stringify(hostFacilities));
-    localStorage.setItem('workhub_facility_spaces', JSON.stringify(facilitySpacesData));
-    if (typeof facilitySpaces !== 'undefined') {
-        Object.keys(facilitySpaces).forEach(k => delete facilitySpaces[k]);
-        Object.assign(facilitySpaces, facilitySpacesData);
-    }
-}
-
-function slugifyFacilityId(name) {
-    const base = (name || 'facility')
-        .toLowerCase()
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/^-|-$/g, '') || 'facility';
-    let id = base;
-    let n = 1;
-    while (hostFacilities[id]) {
-        id = `${base}-${n++}`;
-    }
-    return id;
-}
-
-function getFacilitySpaceCount(facId) {
-    return (facilitySpacesData[facId] || []).length;
-}
-
-function renderFacilityList() {
-    const grid = document.getElementById('facility-list-grid');
-    if (!grid) return;
-    const entries = Object.values(hostFacilities);
-    if (!entries.length) {
-        grid.innerHTML = '<p class="text-slate-400 text-sm col-span-2">Chưa có cơ sở nào. Bấm "Thêm cơ sở" để bắt đầu.</p>';
-        return;
-    }
-    grid.innerHTML = entries.map(f => {
-        const count = getFacilitySpaceCount(f.id);
-        const img = f.image || 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800';
-        return `
-            <div onclick="openFacilityMgmt('${escapeHtml(f.id)}')" class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-teal-500 transition cursor-pointer group">
-                <div class="relative h-40 mb-6 rounded-2xl overflow-hidden shadow-inner">
-                    <img src="${escapeHtml(img)}" alt="" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">
-                    <div class="absolute top-3 right-3 bg-white/90 px-3 py-1 rounded-full text-[10px] font-black text-teal-600 uppercase">${count} Vị trí</div>
-                </div>
-                <h3 class="text-xl font-black text-slate-800 tracking-tight">${escapeHtml(f.name)}</h3>
-                <p class="text-sm text-slate-400">${escapeHtml(f.address)}</p>
-            </div>`;
-    }).join('');
-}
+// ==================== LAYER NAVIGATION ====================
 
 function showHostSpaceLayer(layerId) {
     ['space-mgr-layer-1', 'space-mgr-layer-2', 'space-mgr-layer-3', 'space-mgr-layer-add'].forEach(id => {
@@ -115,6 +56,250 @@ function showHostSpaceLayer(layerId) {
     });
 }
 
+function backToLayer1() {
+    showHostSpaceLayer('space-mgr-layer-1');
+}
+function backToLayer2() {
+    showHostSpaceLayer('space-mgr-layer-2');
+}
+
+// ==================== LAYER 1: TẢI DANH SÁCH CƠ SỞ (TỪ DATABASE) ====================
+
+async function initHostSpacesPage() {
+    const token = localStorage.getItem('token');
+    if (!token) {
+        if(typeof showToast === 'function') showToast("Vui lòng đăng nhập để xem dữ liệu");
+        return;
+    }
+    
+    try {
+        const res = await fetch('/api/hosts/branches', {
+            method: 'GET',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        
+        if(!res.ok) throw new Error("Lỗi xác thực");
+        const data = await res.json();
+        renderFacilityList(data.branches || []);
+    } catch (err) {
+        console.error("Lỗi tải danh sách cơ sở:", err);
+        if(typeof showToast === 'function') showToast("Không thể tải danh sách cơ sở.");
+    }
+}
+
+function renderFacilityList(branches) {
+    const grid = document.getElementById('facility-list-grid');
+    if (!grid) return;
+
+    if (!branches || !branches.length) {
+        grid.innerHTML = '<p class="text-slate-400 text-sm col-span-2">Chưa có cơ sở nào. Bấm "Thêm cơ sở" để bắt đầu.</p>';
+        return;
+    }
+
+    grid.innerHTML = branches.map(b => {
+        const imgHtml = b.Images && b.Images[0]
+            ? `<img src="${escapeHtml(b.Images[0])}" alt="" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">`
+            : `<div class="w-full h-full bg-slate-100 flex items-center justify-center"><span class="text-slate-300 text-xs font-bold uppercase">Chưa có ảnh</span></div>`;
+
+        return `
+            <div onclick="openFacilityMgmt('${escapeHtml(b._id)}')" class="bg-white p-6 rounded-[2rem] border border-slate-100 shadow-sm hover:shadow-xl hover:border-teal-500 transition cursor-pointer group">
+                <div class="relative h-40 mb-6 rounded-2xl overflow-hidden shadow-inner">
+                    ${imgHtml}
+                </div>
+                <h3 class="text-xl font-black text-slate-800 tracking-tight">${escapeHtml(b.Name)}</h3>
+                <p class="text-sm text-slate-400">${escapeHtml(b.Address)}</p>
+            </div>`;
+    }).join('');
+}
+
+// ==================== LAYER 2: THÔNG TIN CƠ SỞ & KHÔNG GIAN ====================
+
+async function openFacilityMgmt(branchId) {
+    currentBranchId = branchId;
+    showHostSpaceLayer('space-mgr-layer-2');
+    
+    const token = localStorage.getItem('token');
+
+    try {
+        const branchRes = await fetch('/api/hosts/branches', {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const branchData = await branchRes.json();
+        const branch = (branchData.branches || []).find(b => String(b._id) === String(branchId));
+
+        if (branch) {
+            const nameEl = document.querySelector('#space-mgr-layer-2 [data-fac-field="name"]');
+            const addrEl = document.querySelector('#space-mgr-layer-2 [data-fac-field="address"]');
+            const noteEl = document.querySelector('#space-mgr-layer-2 [data-fac-field="note"]');
+            if (nameEl) nameEl.value = branch.Name || "";
+            if (addrEl) addrEl.value = branch.Address || "";
+            if (noteEl) noteEl.value = branch.Description || "";
+            
+            // Lấy ảnh từ MongoDB, ẩn nếu chưa có
+            applyImg("branch-main-img", branch.Images && branch.Images[0]);
+        }
+
+        const spaceRes = await fetch(`/api/hosts/branches/${branchId}/spaces`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const spaceData = await spaceRes.json();
+        renderSpacesList(spaceData.spaces || []);
+    } catch (err) {
+        console.error("Lỗi tải thông tin chi nhánh:", err);
+    }
+}
+
+function renderSpacesList(spaces) {
+    const tbody = document.getElementById('spaces-list-body');
+    if (!tbody) return;
+
+    if (!spaces.length) {
+        tbody.innerHTML = '<tr><td colspan="4" class="p-4 text-slate-400 text-sm text-center">Chưa có không gian nào.</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = spaces.map(s => {
+        const statusLabel = SPACE_STATUS_LABELS[s.Status] || s.Status;
+        const catLabel = CATEGORY_LABELS[s.Category] || s.Category;
+        const statusColor = s.Status === "available" || s.Status === "ready"
+            ? "bg-green-50 text-green-600"
+            : s.Status === "maintenance" || s.Status === "preparing"
+            ? "bg-yellow-50 text-yellow-600"
+            : "bg-red-50 text-red-500";
+            
+        return `
+            <tr class="border-b border-slate-50 hover:bg-slate-50 transition">
+                <td class="p-4 font-black text-slate-700">${escapeHtml(s.SpaceCode || s.Name)}</td>
+                <td class="p-4 text-slate-500">${escapeHtml(catLabel)}</td>
+                <td class="p-4"><span class="px-2 py-1 rounded-lg text-[9px] uppercase font-black ${statusColor}">${escapeHtml(statusLabel)}</span></td>
+                <td class="p-4"><button type="button" onclick="openSpaceDetail('${escapeHtml(String(s._id))}')" class="text-teal-600 underline font-black text-xs">Chi tiết</button></td>
+            </tr>`;
+    }).join('');
+}
+
+async function saveBranchInfo() {
+    const nameEl = document.querySelector('[data-fac-field="name"]');
+    const addrEl = document.querySelector('[data-fac-field="address"]');
+    const noteEl = document.querySelector('[data-fac-field="note"]');
+    const imgInput = document.getElementById("branch-img-input");
+  
+    const name = nameEl?.value.trim();
+    const address = addrEl?.value.trim();
+    if (!name || !address) {
+        if(typeof showToast === 'function') showToast("Tên cơ sở và địa chỉ không được để trống.");
+        return;
+    }
+  
+    const form = new FormData();
+    form.append("name", name);
+    form.append("address", address);
+    form.append("note", noteEl?.value.trim() || "");
+    if (imgInput && imgInput.files[0]) form.append("image", imgInput.files[0]);
+  
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/hosts/branches/${currentBranchId}`, {
+        method: "PUT",
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form,
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        if(typeof showToast === 'function') showToast(data.error || "Cập nhật thất bại.");
+        return;
+      }
+  
+      if(typeof showToast === 'function') showToast("Cập nhật cơ sở thành công!");
+      applyImg("branch-main-img", data.branch && data.branch.Images && data.branch.Images[0]);
+      await initHostSpacesPage();
+    } catch (err) {
+      console.error("Lỗi cập nhật cơ sở:", err);
+      if(typeof showToast === 'function') showToast("Lỗi khi cập nhật, vui lòng thử lại.");
+    }
+}
+
+// ==================== LAYER 3: CHI TIẾT KHÔNG GIAN ====================
+
+async function openSpaceDetail(spaceId) {
+    currentSpaceId = spaceId;
+    showHostSpaceLayer("space-mgr-layer-3");
+    const token = localStorage.getItem('token');
+  
+    try {
+      const res = await fetch(`/api/hosts/branches/${currentBranchId}/spaces`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      const space = (data.spaces || []).find((s) => String(s._id) === String(spaceId));
+      
+      if (!space) {
+        if(typeof showToast === 'function') showToast("Không tìm thấy thông tin không gian.");
+        return;
+      }
+  
+      const titleEl = document.getElementById("detail-space-title");
+      const priceEl = document.getElementById("detail-space-price");
+      const statusEl = document.getElementById("detail-space-status");
+  
+      if (titleEl) titleEl.textContent = "Chi tiết: " + (space.SpaceCode || space.Name);
+      if (priceEl) priceEl.value = space.PricePerHour ? Number(space.PricePerHour).toLocaleString("vi-VN") + "đ" : "0đ";
+      if (statusEl) statusEl.value = space.Status || "available";
+  
+      applyImg("space-detail-img", space.Images && space.Images[0]);
+  
+    } catch (err) {
+      console.error("Lỗi tải chi tiết không gian:", err);
+    }
+}
+
+async function saveSpaceDetail() {
+    const priceEl = document.getElementById("detail-space-price");
+    const statusEl = document.getElementById("detail-space-status");
+    const imgInput = document.getElementById("space-img-input");
+  
+    const pricePerHour = Number(String(priceEl?.value || "").replace(/\D/g, ""));
+    const status = statusEl?.value;
+    if (!status) {
+        if(typeof showToast === 'function') showToast("Vui lòng chọn trạng thái.");
+        return;
+    }
+  
+    const form = new FormData();
+    form.append("pricePerHour", pricePerHour);
+    form.append("status", status);
+    if (imgInput && imgInput.files[0]) form.append("image", imgInput.files[0]);
+  
+    const token = localStorage.getItem('token');
+    try {
+      const res = await fetch(`/api/hosts/spaces/${currentSpaceId}`, {
+        method: "PUT",
+        headers: { 'Authorization': `Bearer ${token}` },
+        body: form,
+      });
+      
+      const data = await res.json();
+      if (!res.ok) {
+        if(typeof showToast === 'function') showToast(data.error || "Cập nhật thất bại.");
+        return;
+      }
+  
+      if(typeof showToast === 'function') showToast("Lưu chi tiết không gian thành công!");
+      if (priceEl) priceEl.value = pricePerHour.toLocaleString("vi-VN") + "đ";
+      applyImg("space-detail-img", data.space && data.space.Images && data.space.Images[0]);
+  
+      const spaceRes = await fetch(`/api/hosts/branches/${currentBranchId}/spaces`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const spaceData = await spaceRes.json();
+      renderSpacesList(spaceData.spaces || []);
+    } catch (err) {
+      console.error("Lỗi lưu chi tiết không gian:", err);
+    }
+}
+
+
+// ==================== TẠO MỚI (WIZARD) CỦA HEAD ====================
 function startAddFacility() {
     addFacilityDraft = { imageDataUrl: '', spaces: [] };
     addFacilitySpaceCounter = 0;
@@ -185,7 +370,8 @@ function addFacilityGoStep2() {
     const name = document.getElementById('add-fac-name')?.value.trim();
     const address = document.getElementById('add-fac-address')?.value.trim();
     if (!name || !address) {
-        showToast?.('Vui lòng nhập Tên cơ sở và Địa chỉ') || alert('Vui lòng nhập Tên cơ sở và Địa chỉ');
+        if(typeof showToast === 'function') showToast('Vui lòng nhập Tên cơ sở và Địa chỉ');
+        else alert('Vui lòng nhập Tên cơ sở và Địa chỉ');
         return;
     }
     document.getElementById('add-fac-summary-name').textContent = name;
@@ -278,77 +464,70 @@ function collectSpacesFromWizard() {
             type,
             status,
             price: formatPriceDisplay(priceRaw),
-            image: preview?.dataset?.imageUrl || ''
+            image: preview?.dataset?.imageUrl || '' // Ảnh dạng Base64
         });
     });
     return spaces;
 }
 
-function saveNewFacility() {
+// Gọi API POST TẠO MỚI CHI NHÁNH & CÁC PHÒNG BÊN TRONG CÙNG LÚC
+async function saveNewFacility() {
     const name = document.getElementById('add-fac-name')?.value.trim();
     const address = document.getElementById('add-fac-address')?.value.trim();
     const note = document.getElementById('add-fac-note')?.value.trim();
     const spaces = collectSpacesFromWizard();
+    const token = localStorage.getItem('token');
+
     if (!name || !address) {
-        showToast?.('Thiếu thông tin cơ sở') || alert('Thiếu thông tin cơ sở');
+        if(typeof showToast === 'function') showToast('Thiếu thông tin cơ sở');
+        else alert('Thiếu thông tin cơ sở');
         setAddFacilityStep(1);
         return;
     }
-    if (!spaces.length) {
-        showToast?.('Thêm ít nhất một không gian có Tên/Mã') || alert('Thêm ít nhất một không gian có Tên/Mã');
-        return;
+    
+    // Gói dữ liệu dạng JSON (Cho phép gửi Base64 string cho ảnh)
+    const payload = {
+        name,
+        address,
+        description: note,
+        image: addFacilityDraft.imageDataUrl || "",
+        spaces: spaces
+    };
+
+    try {
+        const res = await fetch('/api/hosts/branches', {
+            method: 'POST',
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await res.json();
+        
+        if (!res.ok) {
+            if(typeof showToast === 'function') showToast(data.error || 'Lỗi khi tạo cơ sở');
+            else alert(data.error || 'Lỗi khi tạo cơ sở');
+            return;
+        }
+
+        if(typeof showToast === 'function') showToast(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
+        else alert(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
+
+        // Tải lại giao diện
+        showHostSpaceLayer('space-mgr-layer-1');
+        await initHostSpacesPage();
+
+    } catch (err) {
+        console.error('Lỗi lưu cơ sở mới:', err);
+        if(typeof showToast === 'function') showToast('Lỗi khi lưu, vui lòng thử lại.');
     }
-    const facId = slugifyFacilityId(name);
-    const image = addFacilityDraft.imageDataUrl
-        || 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=800';
-    hostFacilities[facId] = { id: facId, name, address, note, image };
-    facilitySpacesData[facId] = spaces;
-    persistHostFacilities();
-    renderFacilityList();
-    showHostSpaceLayer('space-mgr-layer-1');
-    showToast?.(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`) || alert(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
 }
 
-function initHostSpacesPage() {
-    loadHostFacilitiesFromStorage();
-    renderFacilityList();
-}
-
-function openFacilityMgmt(facId) {
-    showHostSpaceLayer('space-mgr-layer-2');
-    const f = hostFacilities[facId];
-    if (f) {
-        const nameInput = document.querySelector('#space-mgr-layer-2 [data-fac-field="name"]');
-        const addrInput = document.querySelector('#space-mgr-layer-2 [data-fac-field="address"]');
-        const noteInput = document.querySelector('#space-mgr-layer-2 [data-fac-field="note"]');
-        if (nameInput) nameInput.value = f.name;
-        if (addrInput) addrInput.value = f.address;
-        if (noteInput) noteInput.value = f.note || '';
-    }
-    const tbody = document.getElementById('spaces-list-body');
-    const spaces = facilitySpacesData[facId] || [];
-    if (!tbody) return;
-    tbody.innerHTML = spaces.map(s => {
-        const statusLabel = SPACE_STATUS_LABELS[s.status] || s.status;
-        return `<tr class="border-b border-slate-50 hover:bg-slate-50 transition">
-            <td class="p-4 font-black text-slate-700">${escapeHtml(s.id)}</td>
-            <td class="p-4 text-slate-500">${escapeHtml(s.type)}</td>
-            <td class="p-4"><span class="px-2 py-1 rounded-lg text-[9px] uppercase font-black status-${escapeHtml(s.status)}">${statusLabel}</span></td>
-            <td class="p-4"><button type="button" onclick="openSpaceDetail('${escapeHtml(s.id)}')" class="text-teal-600 underline font-black">Chi tiết</button></td>
-        </tr>`;
-    }).join('');
-}
-
-function backToLayer1() {
-    showHostSpaceLayer('space-mgr-layer-1');
-}
-
-function backToLayer2() {
-    showHostSpaceLayer('space-mgr-layer-2');
-}
 
 // =======================================================
-// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
+// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS) CỦA HEAD (GIỮ NGUYÊN)
 // =======================================================
 
 let allBookingsCache = []; 
@@ -843,13 +1022,19 @@ function applyFunnelFilter(filterType) {
 // TỰ ĐỘNG KÍCH HOẠT KHI TẢI TRANG
 // =======================================================
 window.addEventListener('DOMContentLoaded', () => {
+    // 1. Tự động load danh sách Bookings nếu ở trang Bookings
     if (window.location.pathname === '/host/bookings') {
         loadHostBookings();
+    }
+    
+    // 2. Tự động load danh sách Cơ sở nếu ở trang Quản lý không gian
+    if (window.location.pathname === '/host/spaces') {
+        initHostSpacesPage();
     }
 
     const searchInput = document.getElementById('booking-search-input');
     if (searchInput) {
-        // Cập nhật: Có thể lọc trực tiếp khi gõ chữ (input) hoặc khi bấm Enter
+        // Có thể lọc trực tiếp khi gõ chữ (input) hoặc khi bấm Enter
         searchInput.addEventListener('input', handleBookingSearch);
         searchInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {

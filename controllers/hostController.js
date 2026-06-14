@@ -31,6 +31,26 @@ const emitBookingUpdate = (bookingId, newStatus) => {
   }
 };
 
+function mapCategory(type) {
+  const map = {
+    "Phòng họp": "meeting_room",
+    "Chỗ ngồi tự do": "desk",
+    "Văn phòng": "office",
+    "Sự kiện": "event",
+  };
+  return map[type] || "desk";
+}
+
+function mapStatus(status) {
+  const map = {
+    ready: "available",
+    preparing: "available",
+    occupied: "available",
+    suspended: "inactive",
+  };
+  return map[status] || "available";
+}
+
 // ==========================================
 // ĐIỀU HƯỚNG GIAO DIỆN
 // ==========================================
@@ -203,13 +223,60 @@ async function updateProfileAPI(req, res) {
 }
 
 // ==========================================
-// QUẢN LÝ CHI NHÁNH & PHÒNG
+// QUẢN LÝ CHI NHÁNH & PHÒNG (GỘP MINH HIẾU)
 // ==========================================
 async function getHostBranches(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
     const branches = await Branch.find({ $or: [{ HostID: hostId }, { hostID: hostId }] }).lean();
     return res.json({ branches });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+async function createBranch(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const branch = await Branch.create({
+      HostID: hostId,
+      Name: req.body.name,
+      Address: req.body.address,
+      Description: req.body.note || req.body.description || "",
+      City: req.body.city || "",
+      District: req.body.district || "",
+      OpeningTime: req.body.openingTime || "07:00",
+      ClosingTime: req.body.closingTime || "22:00",
+      Status: 'active'
+    });
+    return res.status(201).json(branch);
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+async function updateBranch(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const { branchId } = req.params;
+
+    const branch = await Branch.findOneAndUpdate(
+      { _id: branchId, HostID: hostId },
+      {
+        $set: {
+          Name: req.body.name || undefined,
+          Address: req.body.address || undefined,
+          Description: req.body.note !== undefined ? req.body.note : undefined,
+          Images: req.body.images || undefined,
+          OpeningTime: req.body.openingTime || undefined,
+          ClosingTime: req.body.closingTime || undefined,
+        },
+      },
+      { new: true },
+    ).lean();
+
+    if (!branch) return res.status(404).json({ error: "Chi nhánh không tìm thấy." });
+    return res.json({ message: "Cập nhật cơ sở thành công.", branch });
   } catch (error) {
     return sendServerError(res, error);
   }
@@ -228,6 +295,117 @@ async function getHostSpaces(req, res) {
   }
 }
 
+async function getBranchSpaces(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const { branchId } = req.params;
+    const branch = await Branch.findOne({ _id: branchId, HostID: hostId }).lean();
+    if (!branch) return res.status(404).json({ error: "Chi nhánh không tìm thấy." });
+    
+    const spaces = await Space.find({ BranchID: branchId }).lean();
+    return res.json({ spaces });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+async function createSpace(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const { branchId } = req.params;
+    const branch = await Branch.findOne({ _id: branchId, HostID: hostId }).lean();
+    if (!branch) return res.status(404).json({ error: "Chi nhánh không tồn tại." });
+
+    const space = await Space.create({
+      BranchID: branchId,
+      HostID: hostId,
+      SpaceCode: req.body.id || req.body.spaceCode,
+      Name: req.body.name || req.body.id,
+      Category: mapCategory(req.body.type),
+      PricePerHour: Number(String(req.body.price || "0").replace(/\D/g, "")),
+      Status: mapStatus(req.body.status),
+    });
+    return res.status(201).json(space);
+  } catch (error) {
+    if (error.code === 11000) return res.status(409).json({ error: "Mã không gian đã tồn tại." });
+    return sendServerError(res, error);
+  }
+}
+
+async function updateSpace(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const { spaceId } = req.params;
+
+    const space = await Space.findOneAndUpdate(
+      { _id: spaceId, HostID: hostId },
+      {
+        $set: {
+          PricePerHour: req.body.pricePerHour !== undefined ? Number(String(req.body.pricePerHour).replace(/\D/g, "")) : undefined,
+          Status: req.body.status || undefined,
+          Name: req.body.name || undefined,
+          Images: req.body.images || undefined,
+        },
+      },
+      { new: true },
+    ).lean();
+
+    if (!space) return res.status(404).json({ error: "Không gian không tìm thấy." });
+    return res.json({ message: "Cập nhật không gian thành công.", space });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+// Hàm gộp việc tạo Cơ sở và Các không gian cùng lúc (Hứng dữ liệu từ Giao diện)
+async function createBranchAndSpaces(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    if (!hostId) return res.status(401).json({ error: 'Không tìm thấy Token xác thực.' });
+
+    const { name, address, description, image, spaces } = req.body;
+
+    if (!name || !address) {
+      return res.status(400).json({ error: 'Tên và địa chỉ cơ sở là bắt buộc.' });
+    }
+
+    // 1. Tạo Branch
+    const branch = await Branch.create({
+      HostID: hostId,
+      Name: name,
+      Address: address,
+      Description: description || "",
+      Images: image ? [image] : [],
+      Status: 'active'
+    });
+
+    // 2. Tạo Spaces tương ứng nếu có
+    const createdSpaces = [];
+    if (spaces && Array.isArray(spaces) && spaces.length > 0) {
+      const spaceDocs = spaces.map(sp => ({
+        BranchID: branch._id,
+        HostID: hostId,
+        SpaceCode: sp.id,
+        Name: sp.id,
+        Category: mapCategory(sp.type),
+        PricePerHour: Number(String(sp.price || "0").replace(/\D/g, "")),
+        Status: mapStatus(sp.status),
+        Images: sp.image ? [sp.image] : []
+      }));
+      
+      const insertedSpaces = await Space.insertMany(spaceDocs);
+      createdSpaces.push(...insertedSpaces);
+    }
+
+    return res.status(201).json({ message: 'Tạo cơ sở thành công', branch, spaces: createdSpaces });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+// ==========================================
+// CÁC HÀNH ĐỘNG XỬ LÝ ĐƠN (XÁC NHẬN - CHECKIN - HỦY)
+// ==========================================
 async function getHostBookings(req, res) {
   try {
     const currentTime = new Date();
@@ -255,9 +433,6 @@ async function getHostBookings(req, res) {
   }
 }
 
-// ==========================================
-// CÁC HÀNH ĐỘNG XỬ LÝ ĐƠN (XÁC NHẬN - CHECKIN - HỦY)
-// ==========================================
 async function confirmBooking(req, res) {
   try {
     const { bookingId } = req.params;
@@ -354,5 +529,11 @@ module.exports = {
   getHostBookings,
   confirmBooking,
   checkinBooking,
-  cancelBooking
+  cancelBooking,
+  createBranch,
+  updateBranch,
+  getBranchSpaces,
+  createSpace,
+  updateSpace,
+  createBranchAndSpaces
 };
