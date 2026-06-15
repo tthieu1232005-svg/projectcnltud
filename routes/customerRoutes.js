@@ -18,8 +18,7 @@ const {
 } = require('../controllers/customerController');
 
 // Import Middleware bảo mật
-const { verifyToken, authorizeRole } = require('../middleware/auth');
-
+const { verifyToken, authorizeRole } = require('../middlewares/authMiddleware');
 const router = express.Router();
 
 // ==========================================
@@ -34,15 +33,12 @@ router.get('/detail', detailPage);
 router.get('/payment', (req, res) => {
     res.render('customer/payment', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
-
 router.get('/history', (req, res) => {
     res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
-
 router.get('/payment_history', (req, res) => {
     res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
-
 router.get('/profile', (req, res) => {
     res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
 });
@@ -60,17 +56,16 @@ router.get('/branches/:branchId/reviews', getBranchReviews);
 // ==========================================
 const protectCustomer = [verifyToken, authorizeRole('customer')];
 
-// API Đặt chỗ và Xác nhận thanh toán (Frontend Na đang gọi trực tiếp)
+// API Đặt chỗ và Xác nhận thanh toán
 router.post('/booking/create', verifyToken, createBooking); 
 router.post('/booking/confirm', verifyToken, confirmBooking);
 
 // Các API Quản lý cá nhân, Đơn hàng, Đánh giá, Thanh toán của BẠN (HEAD)
-// Vẫn giữ biến :userId trên đường dẫn để khớp với logic trong Controller của bạn
 router.get('/:userId/profile', protectCustomer, getCustomerProfile);
 router.put('/:userId/profile', protectCustomer, updateCustomerProfile);
 router.get('/:userId/bookings', protectCustomer, getCustomerBookings);
 
-// Endpoint tạo đơn dự phòng theo chuẩn cấu trúc RESTful của bạn
+// Endpoint tạo đơn dự phòng
 router.post('/:userId/bookings', protectCustomer, createBooking);
 
 // Hành động với đơn hàng

@@ -126,7 +126,7 @@ async function checkAvailableSlots() {
     listGrid.innerHTML = '<p class="text-slate-500 text-sm">Đang tải...</p>';
 
     try {
-        const res = await fetch('/api/customers/spaces/check', { // Sửa link gọi API theo cấu trúc mới
+        const res = await fetch('/api/customers/spaces/check', { 
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -305,7 +305,7 @@ async function handleFinalSuccess() {
         const bookingId = bookingIdEl?.value || new URLSearchParams(window.location.search).get('bookingId');
 
         if (!bookingId) {
-            alert('Thiếu thông tin mã đặt chỗ, không thể xác nhận thanh toán!');
+            alert('Thiếu thông mã đặt chỗ, không thể xác nhận thanh toán!');
             return;
         }
 

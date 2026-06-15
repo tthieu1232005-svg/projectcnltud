@@ -4,6 +4,7 @@ const User = require('../models/User');
 // Lưu ý: Đảm bảo tên file trong thư mục models của bạn khớp với 2 dòng require này
 const CustomerProfile = require('../models/Customer_Profile'); 
 const HostProfile = require('../models/Host_Profile');
+const logActivity = require('../utils/auditLogger');
 
 // ================= CÁC HÀM HỖ TRỢ (HELPERS) =================
 function normalizeEmail(email) {
@@ -103,7 +104,14 @@ async function registerUser(req, res) {
                 BankNumber: String(bankNumber || '').trim()
             });
         }
-
+        await logActivity(
+        user._id, // ID của người vừa đăng nhập
+        'LOGIN',  // Mã hành động
+        'USER',   // Đối tượng bị tác động (chính là tài khoản đó)
+        user._id, // ID của tài khoản
+        `Tài khoản ${user.FullName} vừa đăng nhập hệ thống`, 
+        'info'
+        );
         // 6. Trả về kết quả
         return res.status(201).json({ 
             message: 'Đăng ký thành công.', 
@@ -163,7 +171,7 @@ async function loginUser(req, res) {
             process.env.JWT_SECRET || 'workhub_fallback_secret_key_2026',
             { expiresIn: '1d' }
         );
-
+        await logActivity(user._id, 'LOGIN', 'User', user._id, `Tài khoản ${user.FullName || user.Email} vừa đăng nhập hệ thống`, 'info');
         // 5. Trả về kết quả cho Frontend
         return res.status(200).json({
             message: 'Đăng nhập thành công.',
@@ -186,6 +194,58 @@ function logoutUser(req, res) {
     return res.json({ message: 'Đăng xuất thành công.' });
 }
 
+// ================= LOGIC ĐỔI MẬT KHẨU =================
+async function changePassword(req, res) {
+    try {
+        const { oldPassword, newPassword } = req.body;
+
+        // 1. Kiểm tra userId từ verifyToken truyền sang
+        const userId = req.user?.userId;
+        if (!userId) {
+            return res.status(401).json({ error: 'Phiên làm việc hết hạn, vui lòng đăng nhập lại!' });
+        }
+
+        // 2. Validate dữ liệu đầu vào
+        if (!oldPassword || !newPassword) {
+            return res.status(400).json({ error: 'Vui lòng nhập đầy đủ mật khẩu cũ và mật khẩu mới!' });
+        }
+
+        // 3. Tìm User trong Database
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ error: 'Tài khoản không tồn tại trên hệ thống!' });
+        }
+
+        // 4. Kiểm tra mật khẩu cũ
+        const isMatch = await bcrypt.compare(String(oldPassword), user.PasswordHash);
+        if (!isMatch) {
+            return res.status(400).json({ error: 'Mật khẩu cũ không chính xác!' });
+        }
+
+        // 5. Tiến hành mã hóa mật khẩu mới
+        const salt = await bcrypt.genSalt(10);
+        const newPasswordHash = await bcrypt.hash(String(newPassword), salt);
+
+        // 6. CẬP NHẬT TRỰC TIẾP XUỐNG MONGOOSE TRÁNH BỊ HOOK BYPASS
+        const updateResult = await User.updateOne(
+            { _id: userId },
+            { $set: { PasswordHash: newPasswordHash } }
+        );
+
+        console.log("-> Kết quả cập nhật mật khẩu DB:", updateResult);
+
+        if (updateResult.modifiedCount === 0) {
+            return res.status(500).json({ error: 'Mật khẩu mới trùng mật khẩu cũ hoặc lỗi hệ thống không thể ghi đè!' });
+        }
+
+        return res.status(200).json({
+            message: 'Cập nhật mật khẩu thành công!'
+        });
+
+    } catch (error) {
+        return sendServerError(res, error);
+    }
+}
 
 // ================= BỘ NHỚ TẠM LƯU MÃ OTP MÔ PHỎNG =================
 const otpCache = {};
@@ -271,6 +331,7 @@ module.exports = {
     registerUser,
     loginUser,
     logoutUser,
-    forgotPassword,
+    changePassword,
+   forgotPassword,
     resetPassword
 };

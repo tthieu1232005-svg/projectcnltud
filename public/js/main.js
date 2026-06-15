@@ -21,9 +21,7 @@ const menus = {
         { id: 'admin_dashboard', label: 'Bảng điều khiển', icon: '📊' }, 
         { id: 'admin_users', label: 'Người dùng', icon: '👥' }, 
         { id: 'admin_hosts', label: 'Chủ cơ sở', icon: '🏢' }, 
-        { id: 'admin_branches', label: 'Chi nhánh', icon: '🏪' }, 
-        { id: 'admin_bookings', label: 'Đơn đặt chỗ', icon: '📋' }, 
-        { id: 'admin_reviews', label: 'Đánh giá', icon: '⭐' }
+        { id: 'admin_activitylog', label: 'Nhật ký hoạt động', icon: '⭐' }
     ]
 };
 
@@ -52,9 +50,7 @@ function navigateTo(id) {
         'admin_dashboard': '/admin/dashboard',
         'admin_users': '/admin/users',
         'admin_hosts': '/admin/hosts',
-        'admin_branches': '/admin/branches',
-        'admin_reviews': '/admin/reviews',
-        'admin_bookings': '/admin/bookings'
+        'admin_activitylog': '/admin/activitylog'
     };
     
     if (routes[id]) {
@@ -170,6 +166,7 @@ function renderMenu(currentRole) {
         else if (i.id.startsWith('admin_')) { 
                 expectedPath = '/admin/' + i.id.replace('admin_', '');
         }
+
         if (window.location.pathname === expectedPath) {
             d.classList.add('active');
         }
@@ -191,10 +188,11 @@ function logout() {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userId'); // Dọn dẹp cả ID dự phòng
+    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
     window.location.href = '/login';
 }
 
-// Ẩn menu người dùng khi click ra ngoài (UX Của nhánh HEAD)
+// Ẩn menu người dùng khi click ra ngoài
 document.addEventListener('click', (event) => {
     const userInfo = document.getElementById('user-info');
     const dropdown = document.getElementById('dropdown-menu');
@@ -204,7 +202,7 @@ document.addEventListener('click', (event) => {
 });
 
 // ==========================================
-// XỬ LÝ SỰ KIỆN ĐỔI MẬT KHẨU (GỬI API LÊN BACKEND - Của nhánh Na)
+// XỬ LÝ SỰ KIỆN ĐỔI MẬT KHẨU (GỬI API LÊN BACKEND)
 // ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     // 1. Tìm nút "THAY ĐỔI MẬT KHẨU"
@@ -217,7 +215,7 @@ document.addEventListener('DOMContentLoaded', () => {
         changePasswordBtn.addEventListener('click', async (e) => {
             e.preventDefault();
 
-            // 2. Trỏ tới các ô nhập (Tìm dựa theo loại input password)
+            // 2. Trỏ tới các ô nhập
             const inputs = document.querySelectorAll('input[type="password"]');
 
             const oldPasswordInput = inputs[0];
@@ -256,7 +254,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 // 4. Lấy token
                 const token = localStorage.getItem('token');
 
-                // 5. Gửi request Fetch (ĐÃ SỬA ĐƯỜNG LINK THÀNH /api/auth/...)
+                // 5. Gửi request Fetch
                 const response = await fetch('/api/auth/change-password', {
                     method: 'POST',
                     headers: {
