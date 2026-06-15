@@ -398,13 +398,37 @@ function renderUserTable(users) {
 
 async function toggleUserStatus(userId, targetStatus) {
     if (!confirm(`Xác nhận thao tác này?`)) return;
+    
     const token = localStorage.getItem('token');
-    try {
-        const response = await fetch(`/api/admin/users/${userId}/toggle-status`, { method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` } });
-        if (response.ok) { alert('Thành công!'); fetchUsers(); }
-    } catch (error) { alert('Không thể kết nối.'); }
-}
+    if (!token) {
+        alert('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
+        return;
+    }
 
+    try {
+        const response = await fetch(`/api/admin/users/${userId}/toggle-status`, { 
+            method: 'PATCH', 
+            headers: { 
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            } 
+        });
+        
+        const data = await response.json();
+
+        if (response.ok) { 
+            alert('Thành công!'); 
+            fetchUsers(); 
+        } else {
+            // NẾU CÓ LỖI TỪ SERVER, NÓ SẼ BÁO RÕ RÀNG Ở ĐÂY
+            alert(`Lỗi: ${data.error || 'Lỗi không xác định'}`);
+            console.error("Chi tiết lỗi:", data);
+        }
+    } catch (error) { 
+        alert('Lỗi mạng hoặc không thể kết nối đến máy chủ.'); 
+        console.error(error);
+    }
+}
 async function fetchPendingHosts() {
     const token = localStorage.getItem('token');
     const tbody = document.getElementById('pending-hosts-body');

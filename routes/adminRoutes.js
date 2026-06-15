@@ -10,6 +10,8 @@ router.use(verifyToken, requireAdmin);
 router.get('/stats', adminController.getAdminDashboard);
 router.get('/users', adminController.listUsers);
 
+// KÍCH HOẠT NÚT KHÓA/MỞ KHÓA
+router.patch('/users/:id/toggle-status', adminController.toggleUserStatus);
 // =====================================
 // API QUẢN LÝ CHỦ CƠ SỞ (HOST)
 // =====================================
