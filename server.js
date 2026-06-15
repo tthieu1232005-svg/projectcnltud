@@ -118,6 +118,10 @@ app.get('/admin/hosts', (req, res) => {
     res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' });
 });
 
+app.get('/admin/activitylog', (req, res) => {
+    res.render('admin/activitylog', { scripts: '<script src="/js/admin-main.js"></script>' });
+});
+
 // --- Các trang khác ---
 
 

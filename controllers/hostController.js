@@ -3,6 +3,7 @@ const Branch = require('../models/Branch');
 const Space = require('../models/Space');
 const Booking = require('../models/Booking');
 const PaymentHistory = require('../models/Payment_History');
+const logActivity = require('../utils/auditLogger');
 
 function sendServerError(res, error) {
   console.error(error);
@@ -176,7 +177,11 @@ async function confirmBooking(req, res) {
             newStatus: 'confirmed'
         });
     }
-    
+    const hostId = req.user.id || req.user._id || req.user.userId;
+  
+    // Trong hàm confirmBooking:
+    await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở ${req.user.fullName} đã xác nhận đơn đặt chỗ`, 'success');
+
     return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
 
   } catch (error) {
@@ -224,7 +229,8 @@ async function checkinBooking(req, res) {
             newStatus: 'in-use' 
         });
     }
-    
+    const hostId = req.user.id || req.user._id || req.user.userId;
+    await logActivity(hostId, 'CHECKIN_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã cho khách nhận phòng (Check-in)`, 'info');
     return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận thu đủ 100% tiền!' });
   } catch (error) {
     // In lỗi chi tiết ra Terminal màu đen
