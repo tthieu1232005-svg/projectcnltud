@@ -5,6 +5,7 @@ const PaymentHistory = require('../models/Payment_History');
 const Review = require('../models/Review');
 const Branch = require('../models/Branch');
 const Space = require('../models/Space');
+const logActivity = require('../utils/auditLogger');
 
 // ==========================================
 // HÀM HỖ TRỢ CHUNG
@@ -214,7 +215,7 @@ async function createBooking(req, res) {
             Status: 'pending',
             PaymentType: paymentType || 'deposit'
         });
-
+        await logActivity(userId, 'CREATE_BOOKING', 'Booking', newBooking._id, `Khách hàng vừa tạo đơn đặt chỗ mới với tổng tiền ${totalAmount.toLocaleString('vi-VN')}đ`, 'info');
         return res.status(201).json({ message: 'Đặt chỗ thành công.', booking: newBooking });
     } catch (err) {
         return sendServerError(res, err);
@@ -268,6 +269,7 @@ async function cancelBooking(req, res) {
 
         booking.Status = 'cancelled';
         await booking.save();
+        await logActivity(userId, 'CANCEL_BOOKING', 'Booking', booking._id, `Khách hàng đã hủy đơn đặt chỗ`, 'warning');
 
         return res.json({ message: 'Bạn đã hủy đơn đặt chỗ thành công.', booking });
     } catch (error) {
@@ -318,7 +320,7 @@ async function payRemainder(req, res) {
             PaymentMethod: req.body.paymentMethod || 'cash',
             Status: 'successful'
         });
-
+        await logActivity(userId, 'PAYMENT_SUCCESS', 'PaymentHistory', payment._id, `Khách hàng đã thanh toán thành công phần còn lại (${remainingAmount.toLocaleString('vi-VN')}đ)`, 'success');
         return res.json({ message: 'Thanh toán phần còn lại thành công.', booking, payment });
     } catch (error) {
         return sendServerError(res, error);
@@ -342,16 +344,21 @@ async function submitReview(req, res) {
 
         let review = await Review.findOne({ BookingID: bookingId });
 
-        if (review) {
-            const daysSinceReview = (new Date() - new Date(review.createdAt)) / (1000 * 3600 * 24);
-            if (daysSinceReview > 7) {
-                return res.status(400).json({ error: 'Đã quá 7 ngày, bạn không thể chỉnh sửa đánh giá.' });
-            }
-            review.Rating = rating;
-            review.Comment = comment;
-            await review.save();
-            return res.json({ message: 'Cập nhật đánh giá thành công!', review });
-        } else {
+        // Tìm hàm submitReview và sửa phần if(review) như sau:
+if (review) {
+    const daysSinceReview = (new Date() - new Date(review.createdAt)) / (1000 * 3600 * 24);
+    if (daysSinceReview > 7) {
+        return res.status(400).json({ error: 'Đã quá 7 ngày, bạn không thể chỉnh sửa.' });
+    }
+    review.Rating = rating;
+    review.Comment = comment;
+    await review.save();
+
+    // THÊM DÒNG LOG NÀY VÀO:
+    await logActivity(userId, 'UPDATE_REVIEW', 'Review', review._id, `Khách hàng vừa cập nhật đánh giá cho đơn ${bookingId}`, 'info');
+
+    return res.json({ message: 'Cập nhật đánh giá thành công!', review });
+    } else {
             review = await Review.create({
                 SpaceID: booking.SpaceID,
                 CustomerID: userId,
@@ -359,6 +366,7 @@ async function submitReview(req, res) {
                 Rating: rating,
                 Comment: comment
             });
+            await logActivity(userId, 'SUBMIT_REVIEW', 'Review', review._id, `Khách hàng đã đánh giá đơn hàng ${bookingId}`, 'info');
             return res.json({ message: 'Cảm ơn bạn đã đánh giá!', review });
         }
     } catch (error) {

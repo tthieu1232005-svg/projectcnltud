@@ -21,9 +21,7 @@ const menus = {
         { id: 'admin_dashboard', label: 'Bảng điều khiển', icon: '📊' }, 
         { id: 'admin_users', label: 'Người dùng', icon: '👥' }, 
         { id: 'admin_hosts', label: 'Chủ cơ sở', icon: '🏢' }, 
-        { id: 'admin_branches', label: 'Chi nhánh', icon: '🏪' }, 
-        { id: 'admin_bookings', label: 'Đơn đặt chỗ', icon: '📋' }, 
-        { id: 'admin_reviews', label: 'Đánh giá', icon: '⭐' }
+        { id: 'admin_activitylog', label: 'Nhật ký hoạt động', icon: '⭐' }
     ]
 };
 
@@ -52,9 +50,7 @@ function navigateTo(id) {
         'admin_dashboard': '/admin/dashboard',
         'admin_users': '/admin/users',
         'admin_hosts': '/admin/hosts',
-        'admin_branches': '/admin/branches',
-        'admin_reviews': '/admin/reviews',
-        'admin_bookings': '/admin/bookings'
+        'admin_activitylog': '/admin/activitylog'
     };
     
     if (routes[id]) {

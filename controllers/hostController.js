@@ -4,7 +4,7 @@ const Space = require('../models/Space');
 const Booking = require('../models/Booking');
 const User = require('../models/User');
 const PaymentHistory = require('../models/Payment_History');
-const jwt = require('jsonwebtoken');
+const logActivity = require('../utils/auditLogger');
 
 // ==========================================
 // HÀM HELPER KHÔNG ĐỔI
@@ -464,6 +464,20 @@ async function confirmBooking(req, res) {
     } catch (pErr) {
       console.warn('⚠️ Lịch sử thanh toán lỗi không nghiêm trọng:', pErr.message);
     }
+    
+    if (global.io) {
+        // Phát tín hiệu mang tên 'booking_status_updated' kèm data
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'confirmed'
+        });
+    }
+    const hostId = req.user.id || req.user._id || req.user.userId;
+  
+    // Trong hàm confirmBooking:
+    await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở ${req.user.fullName} đã xác nhận đơn đặt chỗ`, 'success');
+
+    return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
 
     emitBookingUpdate(bookingId, 'confirmed');
     return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
@@ -487,9 +501,17 @@ async function checkinBooking(req, res) {
       { _id: bookingId },
       { $set: { Status: 'in-use', status: 'in-use', DepositAmount: total, depositAmount: total, percentagePaid: 100 } }
     );
-
-    emitBookingUpdate(bookingId, 'in-use');
-    return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận đủ 100% tiền!' });
+    
+    if (global.io) {
+        // Sửa newStatus thành in-use
+        global.io.emit('booking_status_updated', {
+            bookingId: bookingId,
+            newStatus: 'in-use' 
+        });
+    }
+    const hostId = req.user.id || req.user._id || req.user.userId;
+    await logActivity(hostId, 'CHECKIN_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã cho khách nhận phòng (Check-in)`, 'info');
+    return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận thu đủ 100% tiền!' });
   } catch (error) {
     console.error("LỖI CHECK-IN:", error);
     return res.status(500).json({ error: `Chi tiết lỗi Server: ${error.message}` });

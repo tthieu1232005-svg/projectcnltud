@@ -30,8 +30,10 @@ io.on('connection', (socket) => {
 // ==========================================
 // MIDDLEWARE & CẤU HÌNH VIEW
 // ==========================================
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Mở rộng giới hạn payload để tránh lỗi 413 Payload Too Large khi upload ảnh
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
 app.use(express.static(path.join(__dirname, 'public')));
 app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
 
@@ -69,18 +71,22 @@ async function requireHostAuth(req, res, next) {
 }
 
 // ==========================================
-// KHAI BÁO ROUTES
+// KHAI BÁO ROUTES API
 // ==========================================
 app.use('/api/auth', authRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/hosts', hostRoutes);
 app.use('/api/admin', adminRoutes);
 
-// --- Web Routes ---
+// ==========================================
+// KHAI BÁO WEB ROUTES (Render Giao diện EJS)
+// ==========================================
+
+// --- Luồng Đăng nhập / Đăng ký ---
 app.get('/login', (req, res) => res.render('customer/login'));
 app.get('/register', (req, res) => res.render('customer/register'));
 
-// Host Routes (Render)
+// --- Luồng Chủ cơ sở (Host) - Đã được bảo vệ ---
 app.get('/host/profile', requireHostAuth, (req, res) => res.render('host/profile', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/dashboard', requireHostAuth, (req, res) => res.render('host/dashboard', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/spaces', requireHostAuth, (req, res) => res.render('host/spaces', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
@@ -88,12 +94,14 @@ app.get('/host/bookings', requireHostAuth, (req, res) => res.render('host/bookin
 app.get('/host/reports', requireHostAuth, (req, res) => res.render('host/reports', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/payments', requireHostAuth, (req, res) => res.render('host/payments', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 
-// Admin Routes
+// --- Luồng Admin - Kết hợp code của Ngân ---
 app.get('/admin/dashboard', (req, res) => res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' }));
 app.get('/admin/users', (req, res) => res.render('admin/users', { scripts: '<script src="/js/admin-main.js"></script>' }));
 app.get('/admin/hosts', (req, res) => res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' }));
+app.get('/admin/activitylog', (req, res) => res.render('admin/activitylog', { scripts: '<script src="/js/admin-main.js"></script>' }));
 
-// Customer Routes (Cuối cùng)
+// --- Luồng Khách hàng (Customer) ---
+// Định tuyến toàn bộ request còn lại vào customerRoutes
 app.use('/', customerRoutes);
 
 // ==========================================
