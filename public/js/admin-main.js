@@ -7,31 +7,39 @@ const LOGS_PER_PAGE = 50;
 document.addEventListener('DOMContentLoaded', () => {
     const path = window.location.pathname;
 
+    // 1. KÍCH HOẠT CHO TRANG DASHBOARD
+    if (path === '/admin/dashboard') {
+        setupAdminFilters();
+        fetchAdminStats(); // Lệnh này sẽ kéo số liệu về và đắp lên giao diện
+        
+        // Tự động cập nhật số liệu nếu có thay đổi
+        if (typeof io !== 'undefined') {
+            const socket = io();
+            socket.on('new_audit_log_created', () => {
+                fetchAdminStats(); 
+            });
+        }
+    }
+
+    // 2. KÍCH HOẠT CHO TRANG NHẬT KÝ (Đã gom gọn lại, bỏ đoạn lặp thừa)
     if (path === '/admin/activitylog') {
         setupAdminFilters();
         const entityFilter = document.getElementById('filter-entity');
         if (entityFilter) entityFilter.addEventListener('change', () => { currentLogPage = 1; fetchActivityLogs(); });
         
-        fetchActivityLogs(); // Tải dữ liệu lần đầu
+        fetchActivityLogs(); 
 
-        // THÊM ĐOẠN NÀY ĐỂ TRANG TỰ ĐỘNG NHẢY SỐ MÀ KHÔNG CẦN F5
         if (typeof io !== 'undefined') {
             const socket = io();
             socket.on('new_audit_log_created', () => {
                 console.log('🔔 Có hoạt động mới, đang tự động làm mới bảng...');
-                currentLogPage = 1; // Quay về trang 1 để xem log mới nhất
+                currentLogPage = 1; 
                 fetchActivityLogs(); 
             });
         }
     }
 
-    if (path === '/admin/activitylog') {
-        setupAdminFilters();
-        const entityFilter = document.getElementById('filter-entity');
-        if (entityFilter) entityFilter.addEventListener('change', () => { currentLogPage = 1; fetchActivityLogs(); });
-        fetchActivityLogs();
-    }
-
+    // 3. KÍCH HOẠT CHO TRANG QUẢN LÝ NGƯỜI DÙNG
     if (path === '/admin/users') {
         fetchUsers(); 
         const searchInput = document.getElementById('search-user');
@@ -40,6 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (roleFilter) roleFilter.addEventListener('change', filterUsersList);
     }
 
+    // 4. KÍCH HOẠT CHO TRANG DUYỆT HOST
     if (path === '/admin/hosts') {
         fetchPendingHosts();
     }
