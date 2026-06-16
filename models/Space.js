@@ -28,7 +28,7 @@ const spaceSchema = new mongoose.Schema({
     },
     Category: { 
         type: String,
-        enum: ['meeting_room', 'desk', 'office', 'event'],
+        enum: ['meeting_room', 'desk'],
         default: 'desk',
         index: true
     },
