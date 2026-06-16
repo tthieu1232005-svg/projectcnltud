@@ -161,22 +161,12 @@ async function getHostReportsPage(req, res) {
     }
 
     // Lấy bộ lọc từ query string
-    const { branchId, startDate, endDate } = req.query;
+    const { startDate, endDate } = req.query;
     const exportCsv = req.query.export === '1' || req.query.export === 'true';
 
-    // Lấy danh sách chi nhánh của host để hiển thị bộ lọc và xác thực branchId
     const branches = await Branch.find({ HostID: hostId }).sort({ Name: 1 }).lean();
-    const branchIds = branches.map(branch => String(branch._id));
-    const selectedBranchId = branchIds.includes(String(branchId || '')) ? branchId : null;
-
-    // Lấy tất cả không gian của host để lọc booking
     const hostSpaces = await Space.find({ HostID: hostId }).select('_id Name BranchID').lean();
-    const spaceIds = hostSpaces.map(space => space._id);
-
-    // Nếu chọn chi nhánh, chỉ giữ không gian của chi nhánh đó
-    const filteredSpaceIds = selectedBranchId
-      ? hostSpaces.filter(space => String(space.BranchID) === String(selectedBranchId)).map(space => space._id)
-      : spaceIds;
+    const filteredSpaceIds = hostSpaces.map(space => space._id);
 
     // Build bộ lọc cho booking theo SpaceID và theo ngày tạo booking nếu có
     const bookingFilter = {
@@ -250,6 +240,17 @@ async function getHostReportsPage(req, res) {
         revenueText: formatVND(item.revenue)
       }));
 
+    const dailyRevenueMap = successfulBookings.reduce((map, booking) => {
+      if (!booking.createdAt) return map;
+      const dateKey = new Date(booking.createdAt).toISOString().slice(0, 10);
+      map[dateKey] = (map[dateKey] || 0) + Number(booking.TotalAmount || 0);
+      return map;
+    }, {});
+
+    const chartDates = Object.keys(dailyRevenueMap).sort();
+    const chartLabels = chartDates.map(date => new Date(date).toLocaleDateString('vi-VN'));
+    const chartRevenueData = chartDates.map(date => dailyRevenueMap[date]);
+
     // Dữ liệu gửi vào view để hiển thị các số liệu
     const reportTotals = {
       gmvText: formatVND(totalGross),
@@ -258,12 +259,11 @@ async function getHostReportsPage(req, res) {
       cancelledText: formatVND(cancelledRevenue),
       totalBookings: successfulBookings.length,
       totalSpaces: filteredSpaceIds.length,
-      selectedBranchName: selectedBranchId ? branchMap[String(selectedBranchId)] : 'Tất cả chi nhánh'
+      selectedBranchName: 'Tất cả chi nhánh'
     };
 
     // Tạo URL cho export và navigation giữ nguyên filter
     const queryParts = [];
-    if (selectedBranchId) queryParts.push(`branchId=${encodeURIComponent(selectedBranchId)}`);
     if (startDate) queryParts.push(`startDate=${encodeURIComponent(startDate)}`);
     if (endDate) queryParts.push(`endDate=${encodeURIComponent(endDate)}`);
     const reportUrl = '/host/reports' + (queryParts.length ? `?${queryParts.join('&')}` : '');
@@ -301,12 +301,13 @@ async function getHostReportsPage(req, res) {
     return res.render('host/reports', {
       branches,
       filters: {
-        branchId: selectedBranchId,
         startDate: startDate || '',
         endDate: endDate || ''
       },
       reportTotals,
       performanceRows,
+      chartLabels,
+      chartRevenueData,
       exportUrl,
       scripts: '<script src="/js/host-spaces.js"></script>'
     });
