@@ -8,6 +8,8 @@ const {
   getHostBranches,
   createBranch,
   updateBranch,
+  deleteBranchImage,
+  deleteSpaceImage,
   getHostSpaces,
   getBranchSpaces,
   createSpace,
@@ -15,26 +17,29 @@ const {
   getHostBookings,
 } = require("../controllers/hostController");
 
-// Profile
+// --- Profile ---
 router.get("/:hostId/profile", getHostProfile);
 router.put("/:hostId/profile", updateHostProfile);
 
-// Branches — upload.single("image") xử lý field <input name="image">
+// --- Branches (Cơ sở) ---
 router.get("/:hostId/branches", getHostBranches);
-router.post("/:hostId/branches", upload.single("image"), createBranch);
-router.put("/:hostId/branches/:branchId", upload.single("image"), updateBranch);
+router.post("/:hostId/branches", upload.array("image", 10), createBranch);
+router.put(
+  "/:hostId/branches/:branchId",
+  upload.array("image", 10),
+  updateBranch,
+);
+router.post("/:hostId/branches/:branchId/delete-image", deleteBranchImage);
 
-// Spaces
+// --- Spaces (Không gian / Phòng) ---
 router.get("/:hostId/spaces", getHostSpaces);
 router.get("/:hostId/branches/:branchId/spaces", getBranchSpaces);
 router.post(
   "/:hostId/branches/:branchId/spaces",
-  upload.single("image"),
+  upload.array("image", 10),
   createSpace,
 );
-router.put("/:hostId/spaces/:spaceId", upload.single("image"), updateSpace);
-
-// Bookings
-router.get("/:hostId/bookings", getHostBookings);
+router.put("/:hostId/spaces/:spaceId", upload.array("image", 10), updateSpace);
+router.post("/:hostId/spaces/:spaceId/delete-image", deleteSpaceImage);
 
 module.exports = router;
