@@ -2,10 +2,16 @@
 // QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
 // =======================================================
 
-var addFacilityDraft = { imageDataUrl: '', spaces: [] };
+// --- BIẾN TOÀN CỤC CỦA BẠN ---
+var addFacilityDraft = { imageFile: null, spaces: [] };
+var wizardSpaceFiles = {}; // Lưu trữ File ảnh cho từng không gian trong Wizard
 var addFacilitySpaceCounter = 0;
 var currentBranchId = null;
 var currentSpaceId = null;
+
+// --- BIẾN TOÀN CỤC CỦA MINH HIẾU (ĐỂ XỬ LÝ ẢNH LOCAL) ---
+let selectedBranchFiles = [];
+let selectedSpaceFiles = [];
 
 const SPACE_STATUS_LABELS = {
     available: "Sẵn sàng",
@@ -47,8 +53,9 @@ function applyImg(id, src) {
     }
 }
 
-// ==================== LAYER NAVIGATION ====================
-
+// ==========================================
+// --- ĐIỀU HƯỚNG MÀN HÌNH LAYER ---
+// ==========================================
 function showHostSpaceLayer(layerId) {
     ['space-mgr-layer-1', 'space-mgr-layer-2', 'space-mgr-layer-3', 'space-mgr-layer-add'].forEach(id => {
         const el = document.getElementById(id);
@@ -57,14 +64,18 @@ function showHostSpaceLayer(layerId) {
 }
 
 function backToLayer1() {
+    currentBranchId = null;
     showHostSpaceLayer('space-mgr-layer-1');
+    initHostSpacesPage();
 }
+
 function backToLayer2() {
+    currentSpaceId = null;
     showHostSpaceLayer('space-mgr-layer-2');
+    if (currentBranchId) loadSpaceList(currentBranchId);
 }
 
-// ==================== LAYER 1: TẢI DANH SÁCH CƠ SỞ (TỪ DATABASE) ====================
-
+// ==================== LAYER 1: TẢI DANH SÁCH CƠ SỞ ====================
 async function initHostSpacesPage() {
     const token = localStorage.getItem('token');
     if (!token) {
@@ -83,7 +94,6 @@ async function initHostSpacesPage() {
         renderFacilityList(data.branches || []);
     } catch (err) {
         console.error("Lỗi tải danh sách cơ sở:", err);
-        if(typeof showToast === 'function') showToast("Không thể tải danh sách cơ sở.");
     }
 }
 
@@ -97,7 +107,7 @@ function renderFacilityList(branches) {
     }
 
     grid.innerHTML = branches.map(b => {
-        const imgHtml = b.Images && b.Images[0]
+        const imgHtml = b.Images && b.Images.length > 0
             ? `<img src="${escapeHtml(b.Images[0])}" alt="" class="w-full h-full object-cover group-hover:scale-110 transition duration-500">`
             : `<div class="w-full h-full bg-slate-100 flex items-center justify-center"><span class="text-slate-300 text-xs font-bold uppercase">Chưa có ảnh</span></div>`;
 
@@ -113,17 +123,20 @@ function renderFacilityList(branches) {
 }
 
 // ==================== LAYER 2: THÔNG TIN CƠ SỞ & KHÔNG GIAN ====================
-
 async function openFacilityMgmt(branchId) {
     currentBranchId = branchId;
     showHostSpaceLayer('space-mgr-layer-2');
     
-    const token = localStorage.getItem('token');
+    // Reset file rác
+    selectedBranchFiles = [];
+    const fileInput = document.getElementById("branch-img-input");
+    if (fileInput) fileInput.value = "";
+    const previewContainer = document.getElementById("branch-selected-preview-container");
+    if (previewContainer) previewContainer.innerHTML = "";
 
+    const token = localStorage.getItem('token');
     try {
-        const branchRes = await fetch('/api/hosts/branches', {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
+        const branchRes = await fetch('/api/hosts/branches', { headers: { 'Authorization': `Bearer ${token}` } });
         const branchData = await branchRes.json();
         const branch = (branchData.branches || []).find(b => String(b._id) === String(branchId));
 
@@ -135,18 +148,121 @@ async function openFacilityMgmt(branchId) {
             if (addrEl) addrEl.value = branch.Address || "";
             if (noteEl) noteEl.value = branch.Description || "";
             
-            // Lấy ảnh từ MongoDB, ẩn nếu chưa có
-            applyImg("branch-main-img", branch.Images && branch.Images[0]);
+            // Xử lý ảnh bằng logic của Minh-Hiếu
+            const mainImgContainer = document.getElementById("branch-main-img-container") || document.getElementById("branch-main-img");
+            if (mainImgContainer) {
+                if (branch.Images && branch.Images.length > 0) {
+                    mainImgContainer.innerHTML = branch.Images.map(img => `
+                        <div class="relative w-20 h-20 inline-block group mr-2">
+                            <img src="${img}" class="w-full h-full object-cover rounded-xl border shadow-sm">
+                            <button type="button" onclick="deleteExistingBranchImage('${img}')" class="absolute -top-1.5 -right-1.5 bg-red-500 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold shadow hover:bg-red-600 transition">✕</button>
+                        </div>
+                    `).join("");
+                } else {
+                    mainImgContainer.innerHTML = `<span class="text-[10px] text-slate-400 uppercase p-4">Chưa có ảnh hiển thị</span>`;
+                }
+            }
         }
-
-        const spaceRes = await fetch(`/api/hosts/branches/${branchId}/spaces`, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const spaceData = await spaceRes.json();
-        renderSpacesList(spaceData.spaces || []);
+        loadSpaceList(branchId);
     } catch (err) {
         console.error("Lỗi tải thông tin chi nhánh:", err);
     }
+}
+
+// LOGIC XỬ LÝ ẢNH CƠ SỞ (CỦA MINH-HIẾU)
+async function deleteExistingBranchImage(imgUrl) {
+    if (!confirm("Bạn có chắc muốn xóa tấm ảnh này khỏi hệ thống?")) return;
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`/api/hosts/branches/${currentBranchId}/delete-image`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ imageUrl: imgUrl }),
+        });
+        if (response.ok) {
+            if(typeof showToast === 'function') showToast("Xóa ảnh thành công!");
+            openFacilityMgmt(currentBranchId);
+        }
+    } catch (error) { console.error("Lỗi xóa ảnh cũ:", error); }
+}
+
+function previewBranchImagesFromInput(input) {
+    if (input.files && input.files.length > 0) {
+        selectedBranchFiles = [...selectedBranchFiles, ...Array.from(input.files)];
+    }
+    if (input) input.value = ""; 
+    renderBranchSelectedPreviews();
+}
+
+function renderBranchSelectedPreviews() {
+    const container = document.getElementById("branch-selected-preview-container");
+    if (!container) return;
+    container.innerHTML = selectedBranchFiles.map((file, index) => `
+        <div class="relative w-20 h-20 inline-block mt-2 mr-2">
+            <img src="${URL.createObjectURL(file)}" class="w-full h-full object-cover rounded-xl border border-teal-400">
+            <button type="button" onclick="removeSelectedBranchFile(${index})" class="absolute -top-1.5 -right-1.5 bg-slate-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold hover:bg-red-500 transition">✕</button>
+        </div>
+    `).join("");
+}
+
+function removeSelectedBranchFile(index) {
+    selectedBranchFiles.splice(index, 1);
+    renderBranchSelectedPreviews();
+}
+
+async function saveBranchInfo() {
+    const nameEl = document.querySelector('[data-fac-field="name"]');
+    const addrEl = document.querySelector('[data-fac-field="address"]');
+    const noteEl = document.querySelector('[data-fac-field="note"]');
+    
+    const name = nameEl?.value.trim();
+    const address = addrEl?.value.trim();
+    if (!name || !address) {
+        if(typeof showToast === 'function') showToast("Tên cơ sở và địa chỉ không được để trống.");
+        return;
+    }
+    
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("address", address);
+    formData.append("note", noteEl?.value.trim() || "");
+    
+    if (selectedBranchFiles.length > 0) {
+        selectedBranchFiles.forEach((file) => formData.append("image", file));
+    }
+    
+    const token = localStorage.getItem('token');
+    try {
+        const res = await fetch(`/api/hosts/branches/${currentBranchId}`, {
+            method: "PUT",
+            headers: { 'Authorization': `Bearer ${token}` }, // FormData tự xử lý Content-Type
+            body: formData,
+        });
+        
+        const data = await res.json();
+        if (!res.ok) {
+            if(typeof showToast === 'function') showToast(data.error || "Cập nhật thất bại.");
+            return;
+        }
+    
+        if(typeof showToast === 'function') showToast("Cập nhật cơ sở thành công!");
+        selectedBranchFiles = [];
+        openFacilityMgmt(currentBranchId);
+    } catch (err) {
+        console.error("Lỗi cập nhật cơ sở:", err);
+    }
+}
+
+// ==================== KHÔNG GIAN BÊN TRONG CƠ SỞ (LAYER 2) ====================
+async function loadSpaceList(branchId) {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`/api/hosts/branches/${branchId}/spaces`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        renderSpacesList(data.spaces || []);
+    } catch (error) { console.error("Lỗi tải danh sách phòng:", error); }
 }
 
 function renderSpacesList(spaces) {
@@ -167,141 +283,163 @@ function renderSpacesList(spaces) {
             ? "bg-yellow-50 text-yellow-600"
             : "bg-red-50 text-red-500";
             
+        const spaceStr = encodeURIComponent(JSON.stringify(s));
         return `
             <tr class="border-b border-slate-50 hover:bg-slate-50 transition">
                 <td class="p-4 font-black text-slate-700">${escapeHtml(s.SpaceCode || s.Name)}</td>
                 <td class="p-4 text-slate-500">${escapeHtml(catLabel)}</td>
                 <td class="p-4"><span class="px-2 py-1 rounded-lg text-[9px] uppercase font-black ${statusColor}">${escapeHtml(statusLabel)}</span></td>
-                <td class="p-4"><button type="button" onclick="openSpaceDetail('${escapeHtml(String(s._id))}')" class="text-teal-600 underline font-black text-xs">Chi tiết</button></td>
+                <td class="p-4"><button type="button" onclick="openLayer3('${spaceStr}')" class="text-teal-600 underline font-black text-xs">Chi tiết</button></td>
             </tr>`;
     }).join('');
 }
 
-async function saveBranchInfo() {
-    const nameEl = document.querySelector('[data-fac-field="name"]');
-    const addrEl = document.querySelector('[data-fac-field="address"]');
-    const noteEl = document.querySelector('[data-fac-field="note"]');
-    const imgInput = document.getElementById("branch-img-input");
+// ==================== LAYER 3: CHI TIẾT KHÔNG GIAN ====================
+function openLayer3(encodedSpace) {
+    const space = JSON.parse(decodeURIComponent(encodedSpace));
+    currentSpaceId = space._id;
+    selectedSpaceFiles = []; 
   
-    const name = nameEl?.value.trim();
-    const address = addrEl?.value.trim();
-    if (!name || !address) {
-        if(typeof showToast === 'function') showToast("Tên cơ sở và địa chỉ không được để trống.");
-        return;
-    }
+    showHostSpaceLayer("space-mgr-layer-3");
   
-    const form = new FormData();
-    form.append("name", name);
-    form.append("address", address);
-    form.append("note", noteEl?.value.trim() || "");
-    if (imgInput && imgInput.files[0]) form.append("image", imgInput.files[0]);
+    const titleEl = document.getElementById("detail-space-title");
+    if (titleEl) titleEl.innerText = `Chi tiết: ${space.Name} [${space.SpaceCode}]`;
+    document.getElementById("detail-space-price").value = space.PricePerHour;
+    document.getElementById("detail-space-status").value = space.Status;
   
-    const token = localStorage.getItem('token');
-    try {
-      const res = await fetch(`/api/hosts/branches/${currentBranchId}`, {
-        method: "PUT",
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: form,
-      });
-      
-      const data = await res.json();
-      if (!res.ok) {
-        if(typeof showToast === 'function') showToast(data.error || "Cập nhật thất bại.");
-        return;
-      }
+    const spaceInput = document.getElementById("space-img-input");
+    if (spaceInput) spaceInput.value = "";
   
-      if(typeof showToast === 'function') showToast("Cập nhật cơ sở thành công!");
-      applyImg("branch-main-img", data.branch && data.branch.Images && data.branch.Images[0]);
-      await initHostSpacesPage();
-    } catch (err) {
-      console.error("Lỗi cập nhật cơ sở:", err);
-      if(typeof showToast === 'function') showToast("Lỗi khi cập nhật, vui lòng thử lại.");
+    renderSpaceImages(space);
+    document.getElementById("space-detail-new-preview").innerHTML = "";
+    loadSpaceBookings(space._id);
+}
+
+function renderSpaceImages(space) {
+    const container = document.getElementById("space-detail-img-container");
+    if (!container) return;
+  
+    if (space.Images && space.Images.length > 0) {
+      container.innerHTML = space.Images.map(img => `
+        <div class="relative w-20 h-20 inline-block mr-2 mb-2">
+          <img src="${img}" class="w-full h-full object-cover rounded-xl border shadow-sm">
+          <button type="button" onclick="deleteExistingSpaceImage('${img}')" class="absolute -top-1.5 -right-1.5 bg-red-500 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold shadow hover:bg-red-600">✕</button>
+        </div>
+      `).join("");
+    } else {
+      container.innerHTML = `<span class="text-[10px] text-slate-400 uppercase p-4">Chưa có ảnh hiển thị</span>`;
     }
 }
 
-// ==================== LAYER 3: CHI TIẾT KHÔNG GIAN ====================
-
-async function openSpaceDetail(spaceId) {
-    currentSpaceId = spaceId;
-    showHostSpaceLayer("space-mgr-layer-3");
+async function deleteExistingSpaceImage(imgUrl) {
+    if (!confirm("Xóa ảnh này khỏi phòng?")) return;
     const token = localStorage.getItem('token');
-  
     try {
-      const res = await fetch(`/api/hosts/branches/${currentBranchId}/spaces`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      const space = (data.spaces || []).find((s) => String(s._id) === String(spaceId));
-      
-      if (!space) {
-        if(typeof showToast === 'function') showToast("Không tìm thấy thông tin không gian.");
-        return;
-      }
-  
-      const titleEl = document.getElementById("detail-space-title");
-      const priceEl = document.getElementById("detail-space-price");
-      const statusEl = document.getElementById("detail-space-status");
-  
-      if (titleEl) titleEl.textContent = "Chi tiết: " + (space.SpaceCode || space.Name);
-      if (priceEl) priceEl.value = space.PricePerHour ? Number(space.PricePerHour).toLocaleString("vi-VN") + "đ" : "0đ";
-      if (statusEl) statusEl.value = space.Status || "available";
-  
-      applyImg("space-detail-img", space.Images && space.Images[0]);
-  
-    } catch (err) {
-      console.error("Lỗi tải chi tiết không gian:", err);
-    }
+        const response = await fetch(`/api/hosts/spaces/${currentSpaceId}/delete-image`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+            body: JSON.stringify({ imageUrl: imgUrl }),
+        });
+        const data = await response.json();
+        if (response.ok) {
+            if(typeof showToast === 'function') showToast("Xóa ảnh thành công!");
+            openLayer3(encodeURIComponent(JSON.stringify(data.space)));
+        } else alert(data.error || "Lỗi khi xóa ảnh phòng.");
+    } catch (error) { console.error("Lỗi xóa ảnh phòng cũ:", error); }
+}
+
+function previewNewSpaceDetailImages(input) {
+    if (input.files && input.files.length > 0) selectedSpaceFiles = [...selectedSpaceFiles, ...Array.from(input.files)];
+    if (input) input.value = ""; 
+    renderSpaceSelectedPreviews();
+}
+
+function renderSpaceSelectedPreviews() {
+    const previewDiv = document.getElementById("space-detail-new-preview");
+    if (!previewDiv) return;
+    previewDiv.innerHTML = selectedSpaceFiles.map((file, index) => `
+        <div class="relative w-20 h-20 inline-block mr-2 mb-2">
+            <img src="${URL.createObjectURL(file)}" class="w-full h-full object-cover rounded-xl border border-teal-400">
+            <button type="button" onclick="removeSelectedSpaceFile(${index})" class="absolute -top-1.5 -right-1.5 bg-slate-600 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center font-bold hover:bg-red-500">✕</button>
+        </div>
+    `).join("");
+}
+
+function removeSelectedSpaceFile(index) {
+    selectedSpaceFiles.splice(index, 1);
+    renderSpaceSelectedPreviews();
 }
 
 async function saveSpaceDetail() {
-    const priceEl = document.getElementById("detail-space-price");
-    const statusEl = document.getElementById("detail-space-status");
-    const imgInput = document.getElementById("space-img-input");
+    if (!currentSpaceId) return;
+    const pricePerHour = document.getElementById("detail-space-price").value;
+    const status = document.getElementById("detail-space-status").value;
   
-    const pricePerHour = Number(String(priceEl?.value || "").replace(/\D/g, ""));
-    const status = statusEl?.value;
-    if (!status) {
-        if(typeof showToast === 'function') showToast("Vui lòng chọn trạng thái.");
-        return;
+    const formData = new FormData();
+    formData.append("pricePerHour", String(pricePerHour).replace(/\D/g, ""));
+    formData.append("status", status);
+  
+    if (selectedSpaceFiles && selectedSpaceFiles.length > 0) {
+      selectedSpaceFiles.forEach((file) => formData.append("image", file));
     }
-  
-    const form = new FormData();
-    form.append("pricePerHour", pricePerHour);
-    form.append("status", status);
-    if (imgInput && imgInput.files[0]) form.append("image", imgInput.files[0]);
   
     const token = localStorage.getItem('token');
     try {
-      const res = await fetch(`/api/hosts/spaces/${currentSpaceId}`, {
-        method: "PUT",
-        headers: { 'Authorization': `Bearer ${token}` },
-        body: form,
-      });
-      
-      const data = await res.json();
-      if (!res.ok) {
-        if(typeof showToast === 'function') showToast(data.error || "Cập nhật thất bại.");
-        return;
-      }
-  
-      if(typeof showToast === 'function') showToast("Lưu chi tiết không gian thành công!");
-      if (priceEl) priceEl.value = pricePerHour.toLocaleString("vi-VN") + "đ";
-      applyImg("space-detail-img", data.space && data.space.Images && data.space.Images[0]);
-  
-      const spaceRes = await fetch(`/api/hosts/branches/${currentBranchId}/spaces`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const spaceData = await spaceRes.json();
-      renderSpacesList(spaceData.spaces || []);
-    } catch (err) {
-      console.error("Lỗi lưu chi tiết không gian:", err);
-    }
+        const response = await fetch(`/api/hosts/spaces/${currentSpaceId}`, {
+            method: "PUT",
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData,
+        });
+        const data = await response.json();
+        if (response.ok) {
+            if(typeof showToast === 'function') showToast("Cập nhật chi tiết không gian thành công!");
+            selectedSpaceFiles = [];
+            openLayer3(encodeURIComponent(JSON.stringify(data.space)));
+        } else {
+            if(typeof showToast === 'function') showToast(data.error || "Có lỗi xảy ra.");
+        }
+    } catch (error) { console.error("Lỗi cập nhật phòng:", error); }
 }
 
+async function loadSpaceBookings(spaceId) {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`/api/hosts/bookings`, { headers: { 'Authorization': `Bearer ${token}` } });
+        const data = await response.json();
+        const tbody = document.getElementById("space-schedule-body");
+        tbody.innerHTML = "";
+  
+        const filtered = (data.bookings || []).filter((b) => b.SpaceID && b.SpaceID._id === spaceId);
+  
+        if (filtered.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-slate-400 text-sm">Chưa có lịch đặt nào.</td></tr>`;
+            return;
+        }
+  
+        filtered.forEach((booking) => {
+            const start = new Date(booking.StartTime).toLocaleString("vi-VN");
+            const end = new Date(booking.EndTime).toLocaleString("vi-VN");
+            const statusLabel = SPACE_STATUS_LABELS[booking.Status] || booking.Status;
+            tbody.innerHTML += `
+                <tr class="border-b font-medium text-slate-700 hover:bg-slate-50 text-sm">
+                    <td class="p-4">
+                        <div class="font-bold">${booking.CustomerID?.FullName || "Ẩn danh"}</div>
+                        <div class="text-[10px] text-slate-400">${booking.CustomerID?.Email || ""}</div>
+                    </td>
+                    <td class="p-4">${start}</td>
+                    <td class="p-4">${end}</td>
+                    <td class="p-4 uppercase font-bold text-[10px] text-teal-600">${statusLabel}</td>
+                </tr>
+            `;
+        });
+    } catch (error) { console.error(error); }
+}
 
-// ==================== TẠO MỚI (WIZARD) CỦA HEAD ====================
+// ==================== TẠO MỚI CƠ SỞ (WIZARD CỦA BẠN - GIAO DIỆN HEAD) ====================
+// Sửa đổi gửi FormData tuần tự theo chuẩn Minh-Hiếu
 function startAddFacility() {
-    addFacilityDraft = { imageDataUrl: '', spaces: [] };
+    addFacilityDraft = { imageFile: null, spaces: [] };
+    wizardSpaceFiles = {};
     addFacilitySpaceCounter = 0;
     document.getElementById('add-fac-name').value = '';
     document.getElementById('add-fac-address').value = '';
@@ -328,27 +466,22 @@ function setAddFacilityStep(step) {
     s1.classList.toggle('hidden', step !== 1);
     s2.classList.toggle('hidden', step !== 2);
     if (label) {
-        label.textContent = step === 1
-            ? 'Giai đoạn 1: Nhập thông tin cơ sở'
-            : 'Giai đoạn 2: Nhập các không gian trong cơ sở';
+        label.textContent = step === 1 ? 'Giai đoạn 1: Nhập thông tin cơ sở' : 'Giai đoạn 2: Nhập các không gian';
     }
     if (b1 && b2) {
-        b1.className = step === 1
-            ? 'px-4 py-2 rounded-xl bg-teal-600 text-white'
-            : 'px-4 py-2 rounded-xl bg-slate-100 text-slate-400';
-        b2.className = step === 2
-            ? 'px-4 py-2 rounded-xl bg-teal-600 text-white'
-            : 'px-4 py-2 rounded-xl bg-slate-100 text-slate-400';
+        b1.className = step === 1 ? 'px-4 py-2 rounded-xl bg-teal-600 text-white' : 'px-4 py-2 rounded-xl bg-slate-100 text-slate-400';
+        b2.className = step === 2 ? 'px-4 py-2 rounded-xl bg-teal-600 text-white' : 'px-4 py-2 rounded-xl bg-slate-100 text-slate-400';
     }
 }
 
+// Lưu file thô vào biến để gửi FormData
 function previewFacilityImage(input) {
     const file = input.files && input.files[0];
     const preview = document.getElementById('add-fac-image-preview');
     if (!file || !preview) return;
+    addFacilityDraft.imageFile = file; // Lưu file gốc
     const reader = new FileReader();
     reader.onload = e => {
-        addFacilityDraft.imageDataUrl = e.target.result;
         preview.innerHTML = `<img src="${e.target.result}" alt="" class="w-full h-full object-cover">`;
     };
     reader.readAsDataURL(file);
@@ -358,10 +491,10 @@ function previewSpaceImage(input, rowId) {
     const file = input.files && input.files[0];
     const preview = document.getElementById(`space-img-preview-${rowId}`);
     if (!file || !preview) return;
+    wizardSpaceFiles[rowId] = file; // Lưu file gốc
     const reader = new FileReader();
     reader.onload = e => {
         preview.innerHTML = `<img src="${e.target.result}" alt="" class="w-full h-full object-cover">`;
-        preview.dataset.imageUrl = e.target.result;
     };
     reader.readAsDataURL(file);
 }
@@ -409,18 +542,18 @@ function addFacilitySpaceRow() {
         <div class="grid sm:grid-cols-2 gap-3">
             <div class="p-3 bg-white rounded-xl border border-slate-100">
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Tên / Mã <span class="text-red-500">*</span></label>
-                <input type="text" data-field="id" placeholder="VD: 103, A-05" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800">
+                <input type="text" data-field="id" placeholder="VD: 103, A-05" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800 space-code-input">
             </div>
             <div class="p-3 bg-white rounded-xl border border-slate-100">
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Loại</label>
-                <select data-field="type" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800">
+                <select data-field="type" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-slate-800 space-type-input">
                     <option value="Phòng họp">Phòng họp</option>
                     <option value="Chỗ ngồi tự do">Chỗ ngồi tự do</option>
                 </select>
             </div>
             <div class="p-3 bg-white rounded-xl border border-slate-100">
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Giá niêm yết / Giờ</label>
-                <input type="text" data-field="price" placeholder="250000" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-teal-600">
+                <input type="text" data-field="price" placeholder="250000" class="w-full bg-transparent border-none p-0 text-sm font-bold outline-none text-teal-600 space-price-input">
             </div>
             <div class="p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <label class="block text-[10px] font-black text-slate-400 uppercase mb-1">Trạng thái</label>
@@ -439,82 +572,87 @@ function removeFacilitySpaceRow(rowId) {
     const list = document.getElementById('add-facility-spaces-list');
     const card = list?.querySelector(`[data-row-id="${rowId}"]`);
     if (card) card.remove();
+    delete wizardSpaceFiles[rowId];
     if (list && !list.children.length) addFacilitySpaceRow();
 }
 
 function formatPriceDisplay(raw) {
     const num = String(raw || '').replace(/\D/g, '');
-    if (!num) return '0đ';
-    return `${Number(num).toLocaleString('vi-VN')}đ`;
+    if (!num) return '0';
+    return num;
 }
 
-function collectSpacesFromWizard() {
-    const list = document.getElementById('add-facility-spaces-list');
-    if (!list) return [];
-    const spaces = [];
-    list.querySelectorAll('[data-row-id]').forEach(card => {
-        const id = card.querySelector('[data-field="id"]')?.value.trim();
-        if (!id) return;
-        const type = card.querySelector('[data-field="type"]')?.value || 'Phòng họp';
-        const status = card.querySelector('[data-field="status"]')?.value || 'ready';
-        const priceRaw = card.querySelector('[data-field="price"]')?.value.trim();
-        const preview = card.querySelector('[id^="space-img-preview-"]');
-        spaces.push({
-            id,
-            type,
-            status,
-            price: formatPriceDisplay(priceRaw),
-            image: preview?.dataset?.imageUrl || '' // Ảnh dạng Base64
-        });
-    });
-    return spaces;
-}
-
-// Gọi API POST TẠO MỚI CHI NHÁNH & CÁC PHÒNG BÊN TRONG CÙNG LÚC
+// Bắn API Tuần tự theo Logic File Local
 async function saveNewFacility() {
     const name = document.getElementById('add-fac-name')?.value.trim();
     const address = document.getElementById('add-fac-address')?.value.trim();
     const note = document.getElementById('add-fac-note')?.value.trim();
-    const spaces = collectSpacesFromWizard();
     const token = localStorage.getItem('token');
 
     if (!name || !address) {
         if(typeof showToast === 'function') showToast('Thiếu thông tin cơ sở');
-        else alert('Thiếu thông tin cơ sở');
         setAddFacilityStep(1);
         return;
     }
     
-    // Gói dữ liệu dạng JSON (Cho phép gửi Base64 string cho ảnh)
-    const payload = {
-        name,
-        address,
-        description: note,
-        image: addFacilityDraft.imageDataUrl || "",
-        spaces: spaces
-    };
+    // Gửi Form Data của Cơ sở
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("address", address);
+    formData.append("note", note || "");
+    if (addFacilityDraft.imageFile) {
+        formData.append("image", addFacilityDraft.imageFile);
+    }
 
     try {
-        const res = await fetch('/api/hosts/branches', {
+        const resBranch = await fetch('/api/hosts/branches', {
             method: 'POST',
-            headers: { 
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(payload)
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData
         });
 
-        const data = await res.json();
+        const branchData = await resBranch.json();
         
-        if (!res.ok) {
-            if(typeof showToast === 'function') showToast(data.error || 'Lỗi khi tạo cơ sở');
-            else alert(data.error || 'Lỗi khi tạo cơ sở');
+        if (!resBranch.ok) {
+            if(typeof showToast === 'function') showToast(branchData.error || 'Lỗi khi tạo cơ sở');
             return;
         }
 
-        if(typeof showToast === 'function') showToast(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
-        else alert(`Đã tạo cơ sở "${name}" với ${spaces.length} không gian`);
+        // Tạo phòng tuần tự với Form Data
+        const list = document.getElementById('add-facility-spaces-list');
+        const cards = list.querySelectorAll('[data-row-id]');
+        let spacesCount = 0;
 
+        for (let card of cards) {
+            const rowId = card.dataset.rowId;
+            const code = card.querySelector('[data-field="id"]')?.value.trim();
+            if (!code) continue;
+
+            const type = card.querySelector('[data-field="type"]')?.value || 'Phòng họp';
+            const status = card.querySelector('[data-field="status"]')?.value || 'ready';
+            const price = formatPriceDisplay(card.querySelector('[data-field="price"]')?.value);
+            
+            const spForm = new FormData();
+            spForm.append("id", code);
+            spForm.append("name", code);
+            spForm.append("type", type);
+            spForm.append("price", price);
+            spForm.append("status", status);
+            
+            if (wizardSpaceFiles[rowId]) {
+                spForm.append("image", wizardSpaceFiles[rowId]);
+            }
+
+            await fetch(`/api/hosts/branches/${branchData._id}/spaces`, {
+                method: "POST",
+                headers: { 'Authorization': `Bearer ${token}` },
+                body: spForm,
+            });
+            spacesCount++;
+        }
+
+        if(typeof showToast === 'function') showToast(`Đã tạo cơ sở "${name}" với ${spacesCount} không gian`);
+        
         // Tải lại giao diện
         showHostSpaceLayer('space-mgr-layer-1');
         await initHostSpacesPage();
@@ -527,21 +665,17 @@ async function saveNewFacility() {
 
 
 // =======================================================
-// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS) CỦA HEAD (GIỮ NGUYÊN)
+// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (CỦA BẠN - GIỮ NGUYÊN)
 // =======================================================
 
 let allBookingsCache = []; 
 
-// ==========================================
-// TỐI ƯU HÓA: LẤY DANH SÁCH CƠ SỞ & KHÔNG GIAN
-// ==========================================
 async function loadHostBookings() {
     const tableBody = document.getElementById('host-booking-table-body');
     const emptyState = document.getElementById('booking-empty-state');
     
     const token = localStorage.getItem('token'); 
     
-    // Nếu chưa đăng nhập, không tải
     if (!token) {
         if (tableBody) tableBody.innerHTML = `<tr><td colspan="6" class="p-8 text-center text-red-500 font-bold bg-red-50 rounded-xl">Phiên đăng nhập không hợp lệ. Vui lòng đăng nhập lại!</td></tr>`;
         if (emptyState) emptyState.style.display = 'none';
@@ -559,9 +693,7 @@ async function loadHostBookings() {
 
         const data = await response.json();
 
-        if (!response.ok) {
-            throw new Error(data.error || 'Không thể tải danh sách đơn hàng.');
-        }
+        if (!response.ok) throw new Error(data.error || 'Không thể tải danh sách đơn hàng.');
     
         allBookingsCache = data.bookings || [];
         
@@ -587,7 +719,6 @@ async function loadHostBookings() {
             }
         }
 
-        // Gọi hàm lọc tổng hợp (mặc định ban đầu sẽ tự load Tất cả)
         applyCombinedFilters();
 
     } catch (error) {
@@ -597,44 +728,33 @@ async function loadHostBookings() {
     }
 }
 
-// =======================================================
-// TRẠNG THÁI BỘ LỌC TOÀN CỤC (GLOBAL FILTER STATE)
-// =======================================================
 let currentStatusFilter = 'all'; 
 let currentTimeFilter = { type: 'all', start: null, end: null };
-let currentKeywordFilter = ''; // Biến lưu trữ từ khóa tìm kiếm
+let currentKeywordFilter = ''; 
 
-// =======================================================
-// HÀM LỌC VÀ SẮP XẾP KẾT HỢP (TÌM KIẾM + TRẠNG THÁI + THỜI GIAN)
-// =======================================================
 function applyCombinedFilters() {
     const now = new Date();
     
-    // 1. BƯỚC LỌC DỮ LIỆU (FILTERING)
     let filteredList = allBookingsCache.filter(booking => {
         const originalStatus = booking.Status || booking.status;
         const end = new Date(booking.EndTime || booking.endTime);
         const isExpired = !isNaN(end.getTime()) && (now >= end);
         
-        // Tự động ép trạng thái Đã kết thúc nếu lố giờ (ảo trên UI)
         let displayStatus = originalStatus;
         if (originalStatus === 'in-use' && isExpired) displayStatus = 'completed';
 
-        // --- Điều kiện A: Khớp Trạng thái ---
         let passStatus = false;
         if (currentStatusFilter === 'all') passStatus = true;
         else if (currentStatusFilter === 'in-use') passStatus = (displayStatus === 'in-use');
         else if (currentStatusFilter === 'completed') passStatus = (displayStatus === 'completed' || originalStatus === 'cancelled');
         else passStatus = (displayStatus === currentStatusFilter);
 
-        // --- Điều kiện B: Khớp Thời gian (Ngày cụ thể) ---
         let passTime = true;
         if (currentTimeFilter.type === 'specific') {
             const bookingStart = new Date(booking.StartTime || booking.startTime);
             passTime = (bookingStart >= currentTimeFilter.start && bookingStart <= currentTimeFilter.end);
         }
 
-        // --- Điều kiện C: Khớp Từ khóa tìm kiếm ---
         let passKeyword = true;
         if (currentKeywordFilter !== '') {
             const bookingId = (booking._id || '').toLowerCase();
@@ -650,11 +770,9 @@ function applyCombinedFilters() {
         return passStatus && passTime && passKeyword;
     });
 
-    // 2. BƯỚC SẮP XẾP DỮ LIỆU (SORTING LÊN ĐẦU)
     filteredList.sort((a, b) => {
         const nowTime = now.getTime();
 
-        // Hàm chấm điểm ưu tiên (Điểm càng thấp càng ưu tiên nằm trên cùng)
         const getPriorityScore = (bk) => {
             const status = bk.Status || bk.status;
             const endObj = new Date(bk.EndTime || bk.endTime);
@@ -663,48 +781,34 @@ function applyCombinedFilters() {
             let dStatus = status;
             if (status === 'in-use' && isExpired) dStatus = 'completed';
 
-            // Ưu tiên 1: Đang dùng và Sắp hết giờ (<= 15p)
             if (dStatus === 'in-use') {
                 const minsLeft = Math.floor((endObj.getTime() - nowTime) / (1000 * 60));
                 if (minsLeft <= 14 && minsLeft >= 0) return 1; 
-                return 3; // Đang dùng bình thường (Ưu tiên 3)
+                return 3; 
             }
-            // Ưu tiên 2: Chờ duyệt (Cần xử lý gấp)
             if (dStatus === 'pending') return 2; 
-            
-            // Ưu tiên 4: Đã xác nhận (Chờ khách đến)
             if (dStatus === 'confirmed') return 4;
-            
-            // Ưu tiên 5: Đã kết thúc / Đã hủy (Cho xuống đáy bảng)
             return 5; 
         };
 
         const scoreA = getPriorityScore(a);
         const scoreB = getPriorityScore(b);
 
-        // Nếu điểm ưu tiên khác nhau, xếp theo điểm (1,2,3,4,5)
         if (scoreA !== scoreB) {
             return scoreA - scoreB;
         }
 
-        // Nếu cùng điểm ưu tiên, xếp đơn có thời gian kết thúc gần nhất lên trước
         const endA = new Date(a.EndTime || a.endTime).getTime();
         const endB = new Date(b.EndTime || b.endTime).getTime();
         return endA - endB;
     });
 
-    // 3. VẼ BẢNG
     renderBookingsToTable(filteredList);
 }
 
-// =======================================================
-// XỬ LÝ THANH TÌM KIẾM
-// =======================================================
 function handleBookingSearch() {
     const searchInput = document.getElementById('booking-search-input');
     if (!searchInput) return;
-
-    // Cập nhật từ khóa và gọi hàm lọc tổng hợp
     currentKeywordFilter = searchInput.value.trim().toLowerCase();
     applyCombinedFilters();
 }
@@ -739,7 +843,6 @@ function renderBookingsToTable(bookingsList) {
         let displayStatus = status;
         let timeWarningUI = ''; 
 
-        // LOGIC XỬ LÝ KHUNG ĐẾM NGƯỢC
         if (status === 'in-use' && isDateValid) {
             if (minutesLeft < 0) {
                 displayStatus = 'completed';
@@ -833,26 +936,12 @@ function renderBookingsToTable(bookingsList) {
 
         function getSpaceDisplayName(sp) {
             if (!sp || typeof sp !== 'object') return 'Chưa cập nhật tên Không gian';
-            return (
-                sp.name ||
-                sp.Name ||
-                sp.spaceName ||
-                sp.SpaceName ||
-                'Chưa cập nhật tên Không gian'
-            );
+            return (sp.name || sp.Name || sp.spaceName || sp.SpaceName || 'Chưa cập nhật tên Không gian');
         }
 
         function getSpaceDisplayCode(sp) {
             if (!sp || typeof sp !== 'object') return '---';
-            return (
-                sp.SpaceCode ||
-                sp.spaceCode ||
-                sp.Space_Code ||
-                sp.space_code ||
-                sp.code ||
-                sp.Space_code ||
-                '---'
-            );
+            return (sp.SpaceCode || sp.spaceCode || sp.Space_Code || sp.space_code || sp.code || sp.Space_code || '---');
         }
 
         const displaySpaceName = getSpaceDisplayName(space);
@@ -886,7 +975,6 @@ function renderBookingsToTable(bookingsList) {
         `;
     }).join('');
 
-    // Gọi lại hàm đếm ngược thời gian nếu có
     if (typeof startLiveTimers === 'function') {
         startLiveTimers();
     }
@@ -906,7 +994,6 @@ function startLiveTimers() {
             const diff = endTime - now;
 
             if (diff <= 0) {
-                // Chạm mốc 0 giây -> Kích hoạt load lại bảng để xếp nó xuống đáy
                 needToRefreshTable = true;
             } else {
                 const totalSeconds = Math.floor(diff / 1000);
@@ -916,7 +1003,6 @@ function startLiveTimers() {
                 const secsFormatted = secs < 10 ? '0' + secs : secs;
                 container.querySelector('.timer-text').textContent = `Hết giờ: ${mins}p ${secsFormatted}s`;
 
-                // Nếu đếm lùi đến <= 15 phút, xóa class ẩn để hiện lên
                 if (mins <= 14) {
                     container.classList.remove('hidden');
                     container.classList.add('flex', 'animate-pulse');
@@ -924,8 +1010,6 @@ function startLiveTimers() {
             }
         });
 
-        // Khi có đơn hết giờ, applyCombinedFilters() sẽ tự động chấm điểm lại.
-        // Đơn đó từ "Ưu tiên 1" sẽ bị rớt xuống "Ưu tiên 5" và chuyển sang Đã kết thúc.
         if (needToRefreshTable) {
             applyCombinedFilters(); 
         }
@@ -1022,19 +1106,16 @@ function applyFunnelFilter(filterType) {
 // TỰ ĐỘNG KÍCH HOẠT KHI TẢI TRANG
 // =======================================================
 window.addEventListener('DOMContentLoaded', () => {
-    // 1. Tự động load danh sách Bookings nếu ở trang Bookings
     if (window.location.pathname === '/host/bookings') {
         loadHostBookings();
     }
     
-    // 2. Tự động load danh sách Cơ sở nếu ở trang Quản lý không gian
     if (window.location.pathname === '/host/spaces') {
         initHostSpacesPage();
     }
 
     const searchInput = document.getElementById('booking-search-input');
     if (searchInput) {
-        // Có thể lọc trực tiếp khi gõ chữ (input) hoặc khi bấm Enter
         searchInput.addEventListener('input', handleBookingSearch);
         searchInput.addEventListener('keydown', (event) => {
             if (event.key === 'Enter') {
@@ -1050,12 +1131,8 @@ window.addEventListener('DOMContentLoaded', () => {
 // ==========================================
 if (typeof io !== 'undefined') {
     const socket = io();
-
-    // Lắng nghe sự kiện từ Backend
     socket.on('booking_status_updated', (data) => {
         console.log('Đơn hàng cập nhật (Host):', data);
-        
-        // Gọi lại hàm load dữ liệu để làm mới bảng quản lý
         if (typeof loadHostBookings === 'function') {
             loadHostBookings();
         }

@@ -8,10 +8,13 @@ require('dotenv').config(); // Load các biến môi trường từ file .env l�
 
 const { connectDB } = require('./config/db');
 const User = require('./models/User');
+
+// --- Import Routes ---
 const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const hostRoutes = require('./routes/hostRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const paymentRoutes = require("./routes/paymentRoutes"); // Của Minh-Hiếu
 
 const app = express();
 const server = http.createServer(app);
@@ -28,15 +31,26 @@ io.on('connection', (socket) => {
 });
 
 // ==========================================
-// MIDDLEWARE & CẤU HÌNH VIEW
+// MIDDLEWARE XỬ LÝ DỮ LIỆU & TĨNH
 // ==========================================
-// Mở rộng giới hạn payload để tránh lỗi 413 Payload Too Large khi upload ảnh
+// Mở rộng giới hạn payload để tránh lỗi 413 Payload Too Large khi upload ảnh (Phục vụ Minh-Hiếu)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
-app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
+app.use("/uploads", express.static(path.join(__dirname, "public", "uploads"))); // Của Minh-Hiếu
 
+// ==========================================
+// KHAI BÁO ROUTES API
+// ==========================================
+app.use('/api/auth', authRoutes);
+app.use('/api/customers', customerRoutes);
+app.use('/api/hosts', hostRoutes);
+app.use('/api/admin', adminRoutes);
+
+// ==========================================
+// CẤU HÌNH VIEW ENGINE (EJS)
+// ==========================================
 app.use(expressLayouts);
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -50,7 +64,9 @@ app.use((req, res, next) => {
     next();
 });
 
-// Middleware bảo mật Host (Lấy Token từ Authorization hoặc Cookie)
+// ==========================================
+// MIDDLEWARE BẢO MẬT (HOST)
+// ==========================================
 async function requireHostAuth(req, res, next) {
     try {
         const authHeader = req.headers.authorization || req.headers.cookie?.match(/(?:^|;\s*)token=([^;]+)/)?.[1];
@@ -71,14 +87,6 @@ async function requireHostAuth(req, res, next) {
 }
 
 // ==========================================
-// KHAI BÁO ROUTES API
-// ==========================================
-app.use('/api/auth', authRoutes);
-app.use('/api/customers', customerRoutes);
-app.use('/api/hosts', hostRoutes);
-app.use('/api/admin', adminRoutes);
-
-// ==========================================
 // KHAI BÁO WEB ROUTES (Render Giao diện EJS)
 // ==========================================
 
@@ -87,6 +95,8 @@ app.get('/login', (req, res) => res.render('customer/login'));
 app.get('/register', (req, res) => res.render('customer/register'));
 
 // --- Luồng Chủ cơ sở (Host) - Đã được bảo vệ ---
+app.use("/host", requireHostAuth, paymentRoutes); // Tích hợp payment route của Minh-Hiếu
+
 app.get('/host/profile', requireHostAuth, (req, res) => res.render('host/profile', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/dashboard', requireHostAuth, (req, res) => res.render('host/dashboard', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/spaces', requireHostAuth, (req, res) => res.render('host/spaces', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
@@ -94,7 +104,7 @@ app.get('/host/bookings', requireHostAuth, (req, res) => res.render('host/bookin
 app.get('/host/reports', requireHostAuth, (req, res) => res.render('host/reports', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/payments', requireHostAuth, (req, res) => res.render('host/payments', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 
-// --- Luồng Admin - Kết hợp code của Ngân ---
+// --- Luồng Admin ---
 app.get('/admin/dashboard', (req, res) => res.render('admin/dashboard', { scripts: '<script src="/js/admin-main.js"></script>' }));
 app.get('/admin/users', (req, res) => res.render('admin/users', { scripts: '<script src="/js/admin-main.js"></script>' }));
 app.get('/admin/hosts', (req, res) => res.render('admin/hosts', { scripts: '<script src="/js/admin-main.js"></script>' }));
@@ -105,9 +115,19 @@ app.get('/admin/activitylog', (req, res) => res.render('admin/activitylog', { sc
 app.use('/', customerRoutes);
 
 // ==========================================
+// MIDDLEWARE XỬ LÝ LỖI TOÀN CỤC (CỦA MINH HIẾU)
+// ==========================================
+app.use((err, req, res, next) => {
+  console.error("❌ Lỗi server:", err);
+  res.status(err.status || 500).json({
+    status: "error",
+    message: err.message || "Đã xảy ra lỗi server",
+  });
+});
+
+// ==========================================
 // KẾT NỐI CƠ SỞ DỮ LIỆU & KHỞI ĐỘNG SERVER
 // ==========================================
-// Hàm kết nối tự động đọc URI cấu hình trong file .env
 connectDB()
     .then(() => {
         server.listen(PORT, () => {

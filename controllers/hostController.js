@@ -5,6 +5,7 @@ const Booking = require('../models/Booking');
 const User = require('../models/User');
 const PaymentHistory = require('../models/Payment_History');
 const logActivity = require('../utils/auditLogger');
+const jwt = require('jsonwebtoken');
 
 // ==========================================
 // HÀM HELPER KHÔNG ĐỔI
@@ -14,7 +15,7 @@ const sendServerError = (res, error) => {
   return res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại sau.' });
 };
 
-// Middleware/Helper lấy Host ID từ token tiện dụng hơn
+// Middleware/Helper lấy Host ID từ token tiện dụng hơn (CỦA BẠN)
 const getHostIdFromToken = (req) => {
   if (req.user) return req.user.id || req.user._id || req.user.userId;
   const authHeader = req.headers.authorization;
@@ -24,7 +25,7 @@ const getHostIdFromToken = (req) => {
   return decoded.userId || decoded.id || decoded._id;
 };
 
-// Phát tín hiệu Socket.io gọn gàng
+// Phát tín hiệu Socket.io gọn gàng (CỦA BẠN)
 const emitBookingUpdate = (bookingId, newStatus) => {
   if (global.io) {
     global.io.emit('booking_status_updated', { bookingId, newStatus });
@@ -37,6 +38,10 @@ function mapCategory(type) {
     "Chỗ ngồi tự do": "desk",
     "Văn phòng": "office",
     "Sự kiện": "event",
+    meeting_room: "meeting_room",
+    desk: "desk",
+    office: "office",
+    event: "event",
   };
   return map[type] || "desk";
 }
@@ -47,12 +52,15 @@ function mapStatus(status) {
     preparing: "available",
     occupied: "available",
     suspended: "inactive",
+    available: "available",
+    maintenance: "maintenance",
+    inactive: "inactive",
   };
   return map[status] || "available";
 }
 
 // ==========================================
-// ĐIỀU HƯỚNG GIAO DIỆN
+// ĐIỀU HƯỚNG & BẢNG ĐIỀU KHIỂN (CỦA BẠN)
 // ==========================================
 async function renderDashboardView(req, res) {
   try {
@@ -63,9 +71,6 @@ async function renderDashboardView(req, res) {
   }
 }
 
-// ==========================================
-// BẢNG ĐIỀU KHIỂN & THỐNG KÊ (DASHBOARD)
-// ==========================================
 async function getDashboardStatsAPI(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
@@ -74,10 +79,8 @@ async function getDashboardStatsAPI(req, res) {
     const { branchId } = req.query;
     const hostQuery = { $or: [{ HostID: hostId }, { hostID: hostId }] };
 
-    // 1. Tìm chi nhánh của Host
     const branches = await Branch.find(hostQuery).select('Name _id').lean();
 
-    // 2. Lọc không gian (Spaces) theo nhánh hoặc tất cả
     const spaceMatchCondition = branchId && branchId !== 'all'
       ? { $or: [{ BranchID: branchId }, { branchID: branchId }] }
       : hostQuery;
@@ -85,7 +88,6 @@ async function getDashboardStatsAPI(req, res) {
     const currentSpaces = await Space.find(spaceMatchCondition).select('_id SpaceCode Status spaceCode').lean();
     const spaceIds = currentSpaces.map(s => s._id);
 
-    // Default stats nếu không có phòng
     const defaultStats = {
       branches,
       stats: { revenue: 0, totalBookings: 0, totalOccupiedGuests: 0, activeRoomsCount: 0, paidAmount: 0, pendingAmount: 0 },
@@ -95,7 +97,6 @@ async function getDashboardStatsAPI(req, res) {
 
     const bookingMatchCondition = { $or: [{ SpaceID: { $in: spaceIds } }, { spaceID: { $in: spaceIds } }] };
 
-    // 3 & 4. Tính doanh thu từ Aggregate ngắt các đơn đã huỷ
     const [bookingStats, totalBookings, totalOccupiedGuests] = await Promise.all([
       Booking.aggregate([
         { $match: { ...bookingMatchCondition, Status: { $ne: 'cancelled' } } },
@@ -109,7 +110,6 @@ async function getDashboardStatsAPI(req, res) {
     const paidAmount = bookingStats[0]?.totalDeposit || 0;
     const activeRoomsCount = currentSpaces.filter(s => s.Status === 'available').length;
 
-    // 5. Xử lý sơ đồ phòng Live hôm nay
     const nowRealTime = new Date();
     const startOfDay = new Date(new Date(nowRealTime).setHours(0, 0, 0, 0));
     const endOfDay = new Date(new Date(nowRealTime).setHours(23, 59, 59, 999));
@@ -132,13 +132,11 @@ async function getDashboardStatsAPI(req, res) {
       return { SpaceCode: space.SpaceCode || space.spaceCode, LiveStatus: liveStatus };
     });
 
-    // 6. Đơn đặt phòng gần nhất
     const recentBookings = await Booking.find(hostQuery)
       .populate('CustomerID', 'fullName FullName Email email')
       .populate('SpaceID', 'SpaceCode spaceCode Name name')
       .sort({ createdAt: -1 }).limit(5).lean();
 
-    // 7. Thống kê biểu đồ 7 ngày qua
     const sevenDaysAgo = new Date(new Date().setHours(0, 0, 0, 0));
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
 
@@ -210,8 +208,10 @@ async function updateProfileAPI(req, res) {
     }
 
     let updateData = { CompanyName, Hotline, TaxCode, BankName, BankNumber };
+    
+    // Tôn trọng cách lưu ảnh Local của Minh-Hiếu
     if (req.file) {
-      updateData.Logo = req.file.path;
+      updateData.Logo = `/uploads/${req.file.filename}`;
     }
 
     await HostProfile.findOneAndUpdate({ UserID: hostId }, updateData, { returnDocument: 'after', upsert: true, runValidators: true });
@@ -223,12 +223,12 @@ async function updateProfileAPI(req, res) {
 }
 
 // ==========================================
-// QUẢN LÝ CHI NHÁNH & PHÒNG (GỘP MINH HIẾU)
+// QUẢN LÝ CHI NHÁNH & PHÒNG (GỘP BẠN & MINH HIẾU)
 // ==========================================
 async function getHostBranches(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
-    const branches = await Branch.find({ $or: [{ HostID: hostId }, { hostID: hostId }] }).lean();
+    const branches = await Branch.find({ $or: [{ HostID: hostId }, { hostID: hostId }] }).sort({ createdAt: -1 }).lean();
     return res.json({ branches });
   } catch (error) {
     return sendServerError(res, error);
@@ -237,7 +237,14 @@ async function getHostBranches(req, res) {
 
 async function createBranch(req, res) {
   try {
-    const hostId = getHostIdFromToken(req);
+    const hostId = getHostIdFromToken(req); // Dùng Token của Bạn
+    
+    // Dùng mảng ảnh Local của Minh-Hiếu
+    const images = [];
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => images.push(`/uploads/${file.filename}`));
+    }
+
     const branch = await Branch.create({
       HostID: hostId,
       Name: req.body.name,
@@ -247,7 +254,8 @@ async function createBranch(req, res) {
       District: req.body.district || "",
       OpeningTime: req.body.openingTime || "07:00",
       ClosingTime: req.body.closingTime || "22:00",
-      Status: 'active'
+      Status: 'active',
+      Images: images
     });
     return res.status(201).json(branch);
   } catch (error) {
@@ -260,23 +268,53 @@ async function updateBranch(req, res) {
     const hostId = getHostIdFromToken(req);
     const { branchId } = req.params;
 
+    const updateData = {
+      Name: req.body.name || undefined,
+      Address: req.body.address || undefined,
+      Description: req.body.note !== undefined ? req.body.note : undefined,
+      OpeningTime: req.body.openingTime || undefined,
+      ClosingTime: req.body.closingTime || undefined,
+    };
+
+    // Dùng logic $push mảng ảnh Local của Minh-Hiếu
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map((file) => `/uploads/${file.filename}`);
+      const branch = await Branch.findOneAndUpdate(
+        { _id: branchId, HostID: hostId },
+        { $set: updateData, $push: { Images: { $each: newImages } } },
+        { new: true }
+      ).lean();
+
+      if (!branch) return res.status(404).json({ error: "Chi nhánh không tìm thấy." });
+      return res.json({ message: "Cập nhật cơ sở thành công.", branch });
+    }
+
     const branch = await Branch.findOneAndUpdate(
       { _id: branchId, HostID: hostId },
-      {
-        $set: {
-          Name: req.body.name || undefined,
-          Address: req.body.address || undefined,
-          Description: req.body.note !== undefined ? req.body.note : undefined,
-          Images: req.body.images || undefined,
-          OpeningTime: req.body.openingTime || undefined,
-          ClosingTime: req.body.closingTime || undefined,
-        },
-      },
-      { new: true },
+      { $set: updateData },
+      { new: true }
     ).lean();
 
     if (!branch) return res.status(404).json({ error: "Chi nhánh không tìm thấy." });
     return res.json({ message: "Cập nhật cơ sở thành công.", branch });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
+// Hàm xoá ảnh của Minh-Hiếu
+async function deleteBranchImage(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const { branchId } = req.params;
+    const { imageUrl } = req.body;
+    const branch = await Branch.findOneAndUpdate(
+      { _id: branchId, HostID: hostId },
+      { $pull: { Images: imageUrl } },
+      { new: true }
+    );
+    if (!branch) return res.status(404).json({ error: "Không tìm thấy cơ sở." });
+    return res.json({ message: "Đã xóa ảnh thành công.", branch });
   } catch (error) {
     return sendServerError(res, error);
   }
@@ -316,6 +354,12 @@ async function createSpace(req, res) {
     const branch = await Branch.findOne({ _id: branchId, HostID: hostId }).lean();
     if (!branch) return res.status(404).json({ error: "Chi nhánh không tồn tại." });
 
+    // Dùng mảng ảnh Local của Minh-Hiếu
+    const images = [];
+    if (req.files && req.files.length > 0) {
+      req.files.forEach((file) => images.push(`/uploads/${file.filename}`));
+    }
+
     const space = await Space.create({
       BranchID: branchId,
       HostID: hostId,
@@ -324,6 +368,7 @@ async function createSpace(req, res) {
       Category: mapCategory(req.body.type),
       PricePerHour: Number(String(req.body.price || "0").replace(/\D/g, "")),
       Status: mapStatus(req.body.status),
+      Images: images
     });
     return res.status(201).json(space);
   } catch (error) {
@@ -337,17 +382,28 @@ async function updateSpace(req, res) {
     const hostId = getHostIdFromToken(req);
     const { spaceId } = req.params;
 
+    const updateData = {
+      PricePerHour: req.body.pricePerHour !== undefined ? Number(String(req.body.pricePerHour).replace(/\D/g, "")) : undefined,
+      Status: req.body.status || undefined,
+      Name: req.body.name || undefined,
+    };
+
+    // Dùng logic $push mảng ảnh Local của Minh-Hiếu
+    if (req.files && req.files.length > 0) {
+      const newImages = req.files.map((file) => `/uploads/${file.filename}`);
+      const space = await Space.findOneAndUpdate(
+        { _id: spaceId, HostID: hostId },
+        { $set: updateData, $push: { Images: { $each: newImages } } },
+        { new: true }
+      ).lean();
+      if (!space) return res.status(404).json({ error: "Không gian không tìm thấy." });
+      return res.json({ message: "Cập nhật không gian thành công.", space });
+    }
+
     const space = await Space.findOneAndUpdate(
       { _id: spaceId, HostID: hostId },
-      {
-        $set: {
-          PricePerHour: req.body.pricePerHour !== undefined ? Number(String(req.body.pricePerHour).replace(/\D/g, "")) : undefined,
-          Status: req.body.status || undefined,
-          Name: req.body.name || undefined,
-          Images: req.body.images || undefined,
-        },
-      },
-      { new: true },
+      { $set: updateData },
+      { new: true }
     ).lean();
 
     if (!space) return res.status(404).json({ error: "Không gian không tìm thấy." });
@@ -357,7 +413,24 @@ async function updateSpace(req, res) {
   }
 }
 
-// Hàm gộp việc tạo Cơ sở và Các không gian cùng lúc (Hứng dữ liệu từ Giao diện)
+// Hàm xoá ảnh Không gian của Minh-Hiếu
+async function deleteSpaceImage(req, res) {
+  try {
+    const hostId = getHostIdFromToken(req);
+    const { spaceId } = req.params;
+    const { imageUrl } = req.body;
+    const space = await Space.findOneAndUpdate(
+      { _id: spaceId, HostID: hostId },
+      { $pull: { Images: imageUrl } },
+      { new: true }
+    );
+    if (!space) return res.status(404).json({ error: "Không tìm thấy không gian." });
+    return res.json({ message: "Đã xóa ảnh thành công.", space });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+
 async function createBranchAndSpaces(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
@@ -369,7 +442,6 @@ async function createBranchAndSpaces(req, res) {
       return res.status(400).json({ error: 'Tên và địa chỉ cơ sở là bắt buộc.' });
     }
 
-    // 1. Tạo Branch
     const branch = await Branch.create({
       HostID: hostId,
       Name: name,
@@ -379,7 +451,6 @@ async function createBranchAndSpaces(req, res) {
       Status: 'active'
     });
 
-    // 2. Tạo Spaces tương ứng nếu có
     const createdSpaces = [];
     if (spaces && Array.isArray(spaces) && spaces.length > 0) {
       const spaceDocs = spaces.map(sp => ({
@@ -409,7 +480,6 @@ async function createBranchAndSpaces(req, res) {
 async function getHostBookings(req, res) {
   try {
     const currentTime = new Date();
-    // Tối ưu cập nhật tự động phòng hết hạn
     await Booking.updateMany(
       { $or: [{ Status: 'in-use' }, { status: 'in-use' }], $or: [{ EndTime: { $lt: currentTime } }, { endTime: { $lt: currentTime } }] },
       { $set: { Status: 'completed', status: 'completed' } }
@@ -417,7 +487,6 @@ async function getHostBookings(req, res) {
 
     const hostId = getHostIdFromToken(req);
     
-    // Sử dụng lớp bảo vệ populate của HEAD
     const bookings = await Booking.find({ $or: [{ HostID: hostId }, { hostID: hostId }] })
       .populate({ path: 'CustomerID', select: 'email Email FullName fullName', strictPopulate: false })
       .populate({
@@ -465,19 +534,8 @@ async function confirmBooking(req, res) {
       console.warn('⚠️ Lịch sử thanh toán lỗi không nghiêm trọng:', pErr.message);
     }
     
-    if (global.io) {
-        // Phát tín hiệu mang tên 'booking_status_updated' kèm data
-        global.io.emit('booking_status_updated', {
-            bookingId: bookingId,
-            newStatus: 'confirmed'
-        });
-    }
     const hostId = req.user.id || req.user._id || req.user.userId;
-  
-    // Trong hàm confirmBooking:
-    await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở ${req.user.fullName} đã xác nhận đơn đặt chỗ`, 'success');
-
-    return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
+    await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở ${req.user?.fullName || ''} đã xác nhận đơn đặt chỗ`, 'success');
 
     emitBookingUpdate(bookingId, 'confirmed');
     return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
@@ -502,15 +560,10 @@ async function checkinBooking(req, res) {
       { $set: { Status: 'in-use', status: 'in-use', DepositAmount: total, depositAmount: total, percentagePaid: 100 } }
     );
     
-    if (global.io) {
-        // Sửa newStatus thành in-use
-        global.io.emit('booking_status_updated', {
-            bookingId: bookingId,
-            newStatus: 'in-use' 
-        });
-    }
     const hostId = req.user.id || req.user._id || req.user.userId;
     await logActivity(hostId, 'CHECKIN_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã cho khách nhận phòng (Check-in)`, 'info');
+
+    emitBookingUpdate(bookingId, 'in-use');
     return res.status(200).json({ message: 'Nhận phòng thành công. Hệ thống đã ghi nhận thu đủ 100% tiền!' });
   } catch (error) {
     console.error("LỖI CHECK-IN:", error);
@@ -530,8 +583,11 @@ async function cancelBooking(req, res) {
     }
 
     await Booking.updateOne({ _id: bookingId }, { $set: { Status: 'cancelled', status: 'cancelled' } });
-    emitBookingUpdate(bookingId, 'cancelled');
+    
+    const hostId = getHostIdFromToken(req);
+    await logActivity(hostId, 'CANCEL_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã huỷ đơn đặt chỗ`, 'danger');
 
+    emitBookingUpdate(bookingId, 'cancelled');
     return res.status(200).json({ message: 'Đã hủy đơn hàng thành công.' });
   } catch (error) {
     return sendServerError(res, error);
@@ -547,15 +603,17 @@ module.exports = {
   getProfileAPI,
   updateProfileAPI,
   getHostBranches,
-  getHostSpaces,
-  getHostBookings,
-  confirmBooking,
-  checkinBooking,
-  cancelBooking,
   createBranch,
   updateBranch,
+  deleteBranchImage,
+  getHostSpaces,
   getBranchSpaces,
   createSpace,
   updateSpace,
-  createBranchAndSpaces
+  deleteSpaceImage,
+  createBranchAndSpaces,
+  getHostBookings,
+  confirmBooking,
+  checkinBooking,
+  cancelBooking
 };
