@@ -43,20 +43,30 @@ const verifyToken = (req, res, next) => {
  */
 const authorizeRole = (...allowedRoles) => {
     return (req, res, next) => {
-        if (!req.user || !req.user.role) {
-            return res.status(403).json({ error: 'Không tìm thấy thông tin phân quyền.' });
+        // Chưa đăng nhập hoặc chưa có thông tin user
+        if (!req.user) {
+            return res.status(401).json({
+                error: 'Bạn cần đăng nhập để thực hiện thao tác này.'
+            });
         }
 
+        // Không có thông tin role
+        if (!req.user.role) {
+            return res.status(403).json({
+                error: 'Không tìm thấy thông tin phân quyền.'
+            });
+        }
+
+        // Role không được phép
         if (!allowedRoles.includes(req.user.role)) {
-            return res.status(403).json({ 
-                error: 'Bạn không có quyền (role) để truy cập tài nguyên này.' 
+            return res.status(403).json({
+                error: 'Bạn không có quyền truy cập tài nguyên này.'
             });
         }
 
         next();
     };
 };
-
 /**
  * 3. Phân quyền Admin cụ thể
  * Giữ lại để đảm bảo các file như adminRoutes.js không bị lỗi nếu đang gọi hàm này
@@ -67,6 +77,9 @@ const requireAdmin = (req, res, next) => {
     }
     next();
 };
+
+//Kiểm tra quyền truy cập theo vai trò (ví dụ: customer, host)
+
 
 module.exports = {
     verifyToken,

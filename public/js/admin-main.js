@@ -292,14 +292,25 @@ function renderActivityLogTable(logs) {
     if (logs.length === 0) { tbody.innerHTML = '<tr><td colspan="4" class="p-8 text-center text-slate-400">Chưa có dữ liệu.</td></tr>'; return; }
 
     // BỘ TỪ ĐIỂN DỊCH MÃ HÀNH ĐỘNG
-    const actionDictionary = {
-        'LOGIN': 'ĐĂNG NHẬP', 'REGISTER_USER': 'ĐĂNG KÝ MỚI',
-        'BAN_USER': 'KHÓA TÀI KHOẢN', 'UNBAN_USER': 'MỞ KHÓA TÀI KHOẢN',
-        'VERIFY_HOST': 'DUYỆT CHỦ CƠ SỞ', 'CREATE_BOOKING': 'ĐẶT CHỖ MỚI',
-        'CANCEL_BOOKING': 'HỦY ĐẶT CHỖ', 'PAYMENT': 'THANH TOÁN',
-        'CONFIRM': 'XÁC NHẬN ĐƠN', 'CHECKIN': 'NHẬN PHÒNG',
-        'SUBMIT_REVIEW': 'ĐÁNH GIÁ ĐƠN',
-        'UPDATE_REVIEW': 'SỬA ĐÁNH GIÁ'
+const actionDictionary = {
+        'LOGIN': 'Đăng nhập',
+        'LOGOUT': 'Đăng xuất',
+        'REGISTER_USER': 'Đăng ký mới',
+        'BAN_USER': 'Khóa tài khoản',
+        'UNBAN_USER': 'Mở khóa tài khoản',
+        'VERIFY_HOST': 'Duyệt chủ cơ sở',
+        'CREATE_BOOKING': 'Đặt chỗ mới',
+        'CONFIRM_BOOKING': 'Xác nhận đơn',    
+        'CHECKIN_BOOKING': 'Nhận phòng',
+        'CANCEL_BOOKING': 'Hủy đặt chỗ',
+        'PAYMENT': 'Thanh toán',
+        'CONFIRM': 'Xác nhận đơn', 
+        'CHECKIN': 'Nhận phòng',
+        'PAYMENT_PENDING': 'Chờ duyệt tiền',
+        'PAYMENT_SUCCESS': 'Thanh toán thành công',
+        'UPDATE_PROFILE': 'Cập nhật hồ sơ',
+        'SUBMIT_REVIEW': 'Đánh giá đơn',
+        'UPDATE_REVIEW': 'Sửa đánh giá'
     };
 
     tbody.innerHTML = logs.map(log => {

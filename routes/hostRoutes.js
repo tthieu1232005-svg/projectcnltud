@@ -4,15 +4,15 @@ const router = express.Router();
 // Import Controller
 const hostController = require('../controllers/hostController');
 
-// Import Middleware
-const authMiddleware = require('../middlewares/authMiddleware');
+// Import Middleware bảo mật và Upload ảnh
+const { verifyToken, authorizeRole } = require('../middlewares/authMiddleware');
 const upload = require('../middlewares/upload');
 
 // ====================================================================
 // BẬT KHIÊN BẢO VỆ CHO TOÀN BỘ API HOST
-// Yêu cầu: Client phải gửi kèm Token hợp lệ trong Header
+// Yêu cầu: Client phải gửi kèm Token hợp lệ VÀ có role là 'host' (Kế thừa từ Na)
 // ====================================================================
-router.use(authMiddleware.verifyToken);
+router.use(verifyToken, authorizeRole('host'));
 
 // ====================================================================
 // 1. API HỒ SƠ & THỐNG KÊ (HEAD)

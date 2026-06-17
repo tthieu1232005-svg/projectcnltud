@@ -7,6 +7,15 @@ const PaymentHistory = require('../models/Payment_History');
 const logActivity = require('../utils/auditLogger');
 const jwt = require('jsonwebtoken');
 
+
+const cloudinary = require('cloudinary').v2;
+
+// Cấu hình Cloudinary để gọi API xóa ảnh
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
 // ==========================================
 // HÀM HELPER KHÔNG ĐỔI
 // ==========================================
@@ -15,7 +24,7 @@ const sendServerError = (res, error) => {
   return res.status(500).json({ error: 'Lỗi máy chủ, vui lòng thử lại sau.' });
 };
 
-// Middleware/Helper lấy Host ID từ token tiện dụng hơn (CỦA BẠN)
+// Middleware/Helper lấy Host ID từ token tiện dụng hơn
 const getHostIdFromToken = (req) => {
   if (req.user) return req.user.id || req.user._id || req.user.userId;
   const authHeader = req.headers.authorization;
@@ -25,7 +34,7 @@ const getHostIdFromToken = (req) => {
   return decoded.userId || decoded.id || decoded._id;
 };
 
-// Phát tín hiệu Socket.io gọn gàng (CỦA BẠN)
+// Phát tín hiệu Socket.io gọn gàng
 const emitBookingUpdate = (bookingId, newStatus) => {
   if (global.io) {
     global.io.emit('booking_status_updated', { bookingId, newStatus });
@@ -60,7 +69,7 @@ function mapStatus(status) {
 }
 
 // ==========================================
-// ĐIỀU HƯỚNG & BẢNG ĐIỀU KHIỂN (CỦA BẠN)
+// ĐIỀU HƯỚNG & BẢNG ĐIỀU KHIỂN
 // ==========================================
 async function renderDashboardView(req, res) {
   try {
@@ -198,23 +207,49 @@ async function getProfileAPI(req, res) {
   }
 }
 
+// ==========================================
+// CẬP NHẬT HỒ SƠ HOST (ĐÃ TÍCH HỢP XÓA LOGO CŨ TRÊN MÂY)
+// ==========================================
 async function updateProfileAPI(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
     const { FullName, CompanyName, Hotline, TaxCode, BankName, BankNumber } = req.body;
 
+    // 1. Cập nhật tên User nếu có
     if (FullName?.trim()) {
       await User.findByIdAndUpdate(hostId, { fullName: FullName.trim(), FullName: FullName.trim() });
     }
 
     let updateData = { CompanyName, Hotline, TaxCode, BankName, BankNumber };
     
-    // Tôn trọng cách lưu ảnh Local của Minh-Hiếu
+    // 2. Nếu có upload Logo mới
     if (req.file) {
-      updateData.Logo = `/uploads/${req.file.filename}`;
+      updateData.Logo = req.file.path; // Gán URL Cloudinary mới
+
+      // TÌM VÀ XÓA LOGO CŨ TRÊN CLOUDINARY
+      const oldProfile = await HostProfile.findOne({ UserID: hostId });
+      
+      if (oldProfile && oldProfile.Logo) {
+         try {
+             // Lọc lấy public_id từ URL cũ
+             const matches = oldProfile.Logo.match(/\/v\d+\/(.+?)\.[a-zA-Z0-9]+$/);
+             if (matches && matches[1]) {
+                 await cloudinary.uploader.destroy(matches[1]);
+                 console.log("✅ Đã dọn dẹp Logo cũ trên Cloudinary:", matches[1]);
+             }
+         } catch (cloudErr) {
+             console.warn("⚠️ Bỏ qua lỗi xóa Logo cũ trên Cloudinary:", cloudErr.message);
+         }
+      }
     }
 
-    await HostProfile.findOneAndUpdate({ UserID: hostId }, updateData, { returnDocument: 'after', upsert: true, runValidators: true });
+    // 3. Tiến hành cập nhật DB
+    await HostProfile.findOneAndUpdate(
+        { UserID: hostId }, 
+        updateData, 
+        { returnDocument: 'after', upsert: true, runValidators: true }
+    );
+    
     return res.json({ success: true, message: 'Đã cập nhật hồ sơ thành công!' });
   } catch (error) {
     console.error("❌ Lỗi updateProfileAPI:", error);
@@ -223,7 +258,7 @@ async function updateProfileAPI(req, res) {
 }
 
 // ==========================================
-// QUẢN LÝ CHI NHÁNH & PHÒNG (GỘP BẠN & MINH HIẾU)
+// QUẢN LÝ CHI NHÁNH & PHÒNG
 // ==========================================
 async function getHostBranches(req, res) {
   try {
@@ -237,12 +272,12 @@ async function getHostBranches(req, res) {
 
 async function createBranch(req, res) {
   try {
-    const hostId = getHostIdFromToken(req); // Dùng Token của Bạn
+    const hostId = getHostIdFromToken(req); 
     
-    // Dùng mảng ảnh Local của Minh-Hiếu
     const images = [];
+    // Lấy URL mây từ Cloudinary
     if (req.files && req.files.length > 0) {
-      req.files.forEach((file) => images.push(`/uploads/${file.filename}`));
+      req.files.forEach((file) => images.push(file.path));
     }
 
     const branch = await Branch.create({
@@ -276,9 +311,9 @@ async function updateBranch(req, res) {
       ClosingTime: req.body.closingTime || undefined,
     };
 
-    // Dùng logic $push mảng ảnh Local của Minh-Hiếu
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => `/uploads/${file.filename}`);
+      // Lấy URL mây từ Cloudinary
+      const newImages = req.files.map((file) => file.path);
       const branch = await Branch.findOneAndUpdate(
         { _id: branchId, HostID: hostId },
         { $set: updateData, $push: { Images: { $each: newImages } } },
@@ -302,12 +337,27 @@ async function updateBranch(req, res) {
   }
 }
 
-// Hàm xoá ảnh của Minh-Hiếu
+// ==========================================
+// CẬP NHẬT LẠI HÀM XÓA ẢNH CƠ SỞ (XÓA SẠCH TRÊN CLOUDINARY)
+// ==========================================
 async function deleteBranchImage(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
     const { branchId } = req.params;
     const { imageUrl } = req.body;
+
+    // 1. Lọc lấy public_id từ URL và Xóa ảnh trên mây Cloudinary
+    try {
+        // Tách lấy public_id (VD từ URL: https://.../upload/v1234/coworking/branchs/file1.jpg -> coworking/branchs/file1)
+        const matches = imageUrl.match(/\/v\d+\/(.+?)\.[a-zA-Z0-9]+$/);
+        if (matches && matches[1]) {
+            await cloudinary.uploader.destroy(matches[1]);
+        }
+    } catch (cloudErr) {
+        console.warn("⚠️ Bỏ qua lỗi xóa ảnh Cloudinary (Có thể ảnh đã bị xóa trước đó):", cloudErr.message);
+    }
+
+    // 2. Xóa đường dẫn trong MongoDB
     const branch = await Branch.findOneAndUpdate(
       { _id: branchId, HostID: hostId },
       { $pull: { Images: imageUrl } },
@@ -354,10 +404,9 @@ async function createSpace(req, res) {
     const branch = await Branch.findOne({ _id: branchId, HostID: hostId }).lean();
     if (!branch) return res.status(404).json({ error: "Chi nhánh không tồn tại." });
 
-    // Dùng mảng ảnh Local của Minh-Hiếu
     const images = [];
     if (req.files && req.files.length > 0) {
-      req.files.forEach((file) => images.push(`/uploads/${file.filename}`));
+      req.files.forEach((file) => images.push(file.path));
     }
 
     const space = await Space.create({
@@ -388,9 +437,8 @@ async function updateSpace(req, res) {
       Name: req.body.name || undefined,
     };
 
-    // Dùng logic $push mảng ảnh Local của Minh-Hiếu
     if (req.files && req.files.length > 0) {
-      const newImages = req.files.map((file) => `/uploads/${file.filename}`);
+      const newImages = req.files.map((file) => file.path);
       const space = await Space.findOneAndUpdate(
         { _id: spaceId, HostID: hostId },
         { $set: updateData, $push: { Images: { $each: newImages } } },
@@ -413,12 +461,26 @@ async function updateSpace(req, res) {
   }
 }
 
-// Hàm xoá ảnh Không gian của Minh-Hiếu
+// ==========================================
+// CẬP NHẬT LẠI HÀM XÓA ẢNH KHÔNG GIAN (XÓA SẠCH TRÊN CLOUDINARY)
+// ==========================================
 async function deleteSpaceImage(req, res) {
   try {
     const hostId = getHostIdFromToken(req);
     const { spaceId } = req.params;
     const { imageUrl } = req.body;
+
+    // 1. Lọc lấy public_id từ URL và Xóa ảnh trên mây Cloudinary
+    try {
+        const matches = imageUrl.match(/\/v\d+\/(.+?)\.[a-zA-Z0-9]+$/);
+        if (matches && matches[1]) {
+            await cloudinary.uploader.destroy(matches[1]);
+        }
+    } catch (cloudErr) {
+        console.warn("⚠️ Bỏ qua lỗi xóa ảnh Cloudinary (Có thể ảnh đã bị xóa trước đó):", cloudErr.message);
+    }
+
+    // 2. Xóa đường dẫn trong MongoDB
     const space = await Space.findOneAndUpdate(
       { _id: spaceId, HostID: hostId },
       { $pull: { Images: imageUrl } },
@@ -430,6 +492,7 @@ async function deleteSpaceImage(req, res) {
     return sendServerError(res, error);
   }
 }
+
 
 async function createBranchAndSpaces(req, res) {
   try {
@@ -535,7 +598,7 @@ async function confirmBooking(req, res) {
     }
     
     const hostId = req.user.id || req.user._id || req.user.userId;
-    await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở ${req.user?.fullName || ''} đã xác nhận đơn đặt chỗ`, 'success');
+    await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã xác nhận đơn đặt chỗ`, 'success');
 
     emitBookingUpdate(bookingId, 'confirmed');
     return res.status(200).json({ message: 'Xác nhận đơn hàng thành công.' });
@@ -594,9 +657,6 @@ async function cancelBooking(req, res) {
   }
 }
 
-// ==========================================
-// XUẤT MODULE
-// ==========================================
 module.exports = {
   renderDashboardView,
   getDashboardStatsAPI,

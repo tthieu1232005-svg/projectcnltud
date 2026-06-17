@@ -17,8 +17,9 @@ const storage = new CloudinaryStorage({
     let folderName = 'coworking/misc';
     if (file.fieldname === 'customerAvatar'|| file.fieldname === 'LogoFile') folderName = 'coworking/avatars';
     if (file.fieldname === 'verificationDocument') folderName = 'coworking/licenses';
-    if (file.fieldname === 'spaceImage') folderName = 'coworking/spaces';
-    if (file.fieldname === 'branchImage') folderName = 'coworking/branchs';
+    if (file.fieldname === 'image') {
+        folderName = 'coworking/branchs-and-spaces'; 
+    }
 
     return {
       folder: folderName,

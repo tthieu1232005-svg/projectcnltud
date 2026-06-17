@@ -1,6 +1,6 @@
 const express = require('express');
 
-// Khai báo gộp TẤT CẢ các hàm từ authController vào đúng MỘT dòng duy nhất
+// Khai báo gộp TẤT CẢ các hàm từ authController
 const {
     registerUser,
     loginUser,
@@ -21,7 +21,7 @@ router.post('/login', loginUser);
 router.post('/logout', logoutUser);
 router.post('/change-password', authMiddleware.verifyToken, changePassword);
 
-// ================= LUỒNG QUÊN MẬT KHẨU =================
+// ================= LUỒNG QUÊN MẬT KHẨU MÔ PHỎNG =================
 router.post('/forgot-password', forgotPassword); // Bước 1: Gửi email -> Sinh OTP in ra console
 router.post('/reset-password', resetPassword);   // Bước 2: Kiểm tra OTP -> Đổi mật khẩu mới
 
