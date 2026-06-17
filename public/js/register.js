@@ -71,6 +71,9 @@ function toggleHostFields() {
     }
 }
 
+
+// Hàm xử lý đăng ký (gọi API)
+// Sử dụng FormData để có thể gửi cả file (giấy phép kinh doanh) và text
 async function handleRegister(event) {
     if (event) event.preventDefault(); // Chặn hành vi load lại trang mặc định
 
@@ -81,7 +84,6 @@ async function handleRegister(event) {
     const confirmPassword = document.getElementById('confirmPassword').value;
     const fullName = document.getElementById('fullName').value;
 
-    // KIỂM TRA MẬT KHẨU KHỚP NHAU TRƯỚC KHI GỬI
     if (password !== confirmPassword) {
         if (typeof showToast === 'function') {
             return showToast('Mật khẩu xác nhận không khớp!'); 

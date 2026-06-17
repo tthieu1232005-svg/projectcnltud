@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../models/User');
 const CustomerProfile = require('../models/Customer_Profile');
 const Booking = require('../models/Booking');
@@ -572,6 +573,69 @@ async function getBranchReviews(req, res) {
     }
 }
 
+
+// ==========================================
+// RENDER TRANG LỊCH SỬ THANH TOÁN (SSR)
+// ==========================================
+async function getPaymentHistoryPage(req, res) {
+    try {
+        const userId = req.user?.userId || req.user?.id || req.user?._id;   
+        if (!userId) return res.status(401).send("Vui lòng đăng nhập để xem lịch sử thanh toán.");
+
+        const { branchKeyword, startDate, statusFilter } = req.query;
+        
+        let query = { 
+            $or: [
+                { CustomerID: userId },
+                { CustomerID: new mongoose.Types.ObjectId(userId) },
+                { customerID: userId }
+            ]
+        };
+
+        const statusMap = {
+            'Thành công': ['confirmed', 'completed', 'in-use'],
+            'Thất bại': ['cancelled'],
+            'Chờ xử lý': ['pending']
+        };
+
+        if (statusFilter && statusFilter !== 'Tất cả') {
+            query.Status = { $in: statusMap[statusFilter] || ['confirmed', 'cancelled', 'completed', 'pending', 'in-use'] };
+        } else {
+            query.Status = { $in: ['confirmed', 'cancelled', 'completed', 'pending', 'in-use'] };
+        }
+
+        if (startDate) {
+            const startOfDay = new Date(startDate);
+            startOfDay.setHours(0, 0, 0, 0);
+            query.createdAt = { $gte: startOfDay };
+        }
+
+        let bookings = await Booking.find(query)
+            .populate('SpaceID', 'Name name Images')
+            .sort({ createdAt: -1 })
+            .lean();
+
+        if (branchKeyword) {
+            bookings = bookings.filter(b => {
+                const spaceName = b.SpaceID?.Name || b.SpaceID?.name || '';
+                return spaceName.toLowerCase().includes(branchKeyword.toLowerCase());
+            });
+        }
+
+        const allSpaces = await Space.find({}).select('Name name').lean();
+
+        res.render('customer/payment_history', { 
+            bookings, 
+            filters: { branchKeyword: branchKeyword || '', startDate: startDate || '', statusFilter: statusFilter || 'Tất cả' },
+            allSpaces,
+            userId: userId,
+            scripts: '<script src="/js/customer-main.js"></script>'
+        });
+    } catch (error) {
+        console.error("Lỗi payment_history:", error);
+        res.status(500).send("Lỗi kết nối CSDL: " + error.message);
+    }
+}
 module.exports = {
   getHomePage,
   searchBranches,
@@ -588,5 +652,6 @@ module.exports = {
   payRemainder,
   submitReview, 
   getReview,
-  getBranchReviews
+  getBranchReviews,
+  getPaymentHistoryPage
 };

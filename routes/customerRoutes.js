@@ -17,7 +17,8 @@ const {
     payRemainder,
     submitReview,
     getReview,
-    getBranchReviews
+    getBranchReviews,
+    getPaymentHistoryPage
 } = require('../controllers/customerController');
 
 // Import Middleware bảo mật và Upload ảnh
@@ -41,9 +42,7 @@ router.get('/payment', (req, res) => {
 router.get('/history', (req, res) => {
     res.render('customer/history', { scripts: '<script src="/js/customer-main.js"></script><script src="/js/customer-history.js"></script>' });
 });
-router.get('/payment_history', (req, res) => {
-    res.render('customer/payment_history', { scripts: '<script src="/js/customer-main.js"></script>' });
-});
+router.get('/payment_history', verifyToken, getPaymentHistoryPage);
 router.get('/profile', (req, res) => {
     res.render('customer/profile', { scripts: '<script src="/js/customer-main.js"></script>' });
 });

@@ -48,7 +48,6 @@ async function registerUser(req, res) {
         if (!['customer', 'host'].includes(normalizedRole)) {
             return res.status(400).json({ error: 'Role không hợp lệ.' });
         }
-
         // 2. KIỂM TRA ĐẦU VÀO RIÊNG CỦA HOST (Validate TRƯỚC KHI tạo User để tối ưu)
         if (normalizedRole === 'host') {
             if (!companyName || !taxCode || !bankName || !bankNumber) {
@@ -59,13 +58,11 @@ async function registerUser(req, res) {
                 return res.status(400).json({ error: 'Vui lòng tải lên Giấy phép kinh doanh!' });
             }
         }
-
         // 3. KIỂM TRA EMAIL TRÙNG LẶP
         const existingUser = await User.findOne({ Email: normalizedEmail });
         if (existingUser) {
             return res.status(400).json({ error: 'Email này đã được đăng ký!' });
         }
-
         // 4. MÃ HÓA MẬT KHẨU VÀ TẠO USER
         const salt = await bcrypt.genSalt(10);
         const passwordHash = await bcrypt.hash(String(password), salt);
@@ -173,8 +170,17 @@ async function loginUser(req, res) {
             { expiresIn: '1d' }
         );
         
+        // Ghi log hoạt động từ nhánh HEAD
         await logActivity(user._id, 'LOGIN', 'User', user._id, `Tài khoản ${user.FullName || user.Email} vừa đăng nhập hệ thống`, 'info');
         
+        // Gửi cookie tự động để browser có thể dùng cho các route render server-side từ nhánh Gia-Hung
+        res.cookie('authToken', token, {
+            path: '/',
+            maxAge: 24 * 60 * 60 * 1000,
+            httpOnly: true,
+            sameSite: 'lax'
+        });
+
         // 5. Trả về kết quả cho Frontend
         return res.status(200).json({
             message: 'Đăng nhập thành công.',
@@ -194,6 +200,7 @@ async function loginUser(req, res) {
 
 // ================= LOGIC ĐĂNG XUẤT =================
 function logoutUser(req, res) {
+    res.clearCookie('authToken');
     return res.json({ message: 'Đăng xuất thành công.' });
 }
 

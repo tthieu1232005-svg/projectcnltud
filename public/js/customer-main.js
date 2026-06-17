@@ -17,7 +17,7 @@ const isDetailPage = (() => {
     return p.includes('/detail') || s.includes('detail');
 })();
 
-const isPaymentPage = window.location.pathname.includes('/payment');
+const isPaymentPage = window.location.pathname === '/payment';
 const isProfilePage = window.location.pathname.includes('/profile');
 
 // ==========================================

@@ -14,7 +14,11 @@ const authRoutes = require('./routes/authRoutes');
 const customerRoutes = require('./routes/customerRoutes');
 const hostRoutes = require('./routes/hostRoutes');
 const adminRoutes = require('./routes/adminRoutes');
-const paymentRoutes = require("./routes/paymentRoutes"); // Của Minh-Hiếu
+const paymentRoutes = require("./routes/paymentRoutes"); 
+
+// --- Import Controllers & Middlewares ---
+const { getHostReportsPage } = require('./controllers/hostController'); // Của Gia-Hung
+const { verifyToken } = require('./middlewares/authMiddleware'); // Của Gia-Hung
 
 const app = express();
 const server = http.createServer(app);
@@ -33,12 +37,13 @@ io.on('connection', (socket) => {
 // ==========================================
 // MIDDLEWARE XỬ LÝ DỮ LIỆU & TĨNH
 // ==========================================
-// Mở rộng giới hạn payload để tránh lỗi 413 Payload Too Large khi upload ảnh (Phục vụ Minh-Hiếu)
+// Mở rộng giới hạn payload để tránh lỗi 413 Payload Too Large khi upload ảnh
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 app.use(express.static(path.join(__dirname, 'public')));
 app.use("/uploads", express.static(path.join(__dirname, "public", "uploads")));
+
 // ==========================================
 // KHAI BÁO ROUTES API
 // ==========================================
@@ -94,13 +99,14 @@ app.get('/login', (req, res) => res.render('customer/login'));
 app.get('/register', (req, res) => res.render('customer/register'));
 
 // --- Luồng Chủ cơ sở (Host) - Đã được bảo vệ ---
-app.use("/host", requireHostAuth, paymentRoutes); // Tích hợp payment route của Minh-Hiếu
+app.use("/host", requireHostAuth, paymentRoutes); 
 
 app.get('/host/profile', requireHostAuth, (req, res) => res.render('host/profile', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/dashboard', requireHostAuth, (req, res) => res.render('host/dashboard', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/spaces', requireHostAuth, (req, res) => res.render('host/spaces', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 app.get('/host/bookings', requireHostAuth, (req, res) => res.render('host/bookings', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
-app.get('/host/reports', requireHostAuth, (req, res) => res.render('host/reports', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
+// Tích hợp controller của Gia-Hung nhưng dùng màng chắn bảo vệ của HEAD:
+app.get('/host/reports', requireHostAuth, getHostReportsPage);
 app.get('/host/payments', requireHostAuth, (req, res) => res.render('host/payments', { currentUser: req.currentUser, scripts: '<script src="/js/host-spaces.js"></script>' }));
 
 // --- Luồng Admin ---
@@ -114,7 +120,7 @@ app.get('/admin/activitylog', (req, res) => res.render('admin/activitylog', { sc
 app.use('/', customerRoutes);
 
 // ==========================================
-// MIDDLEWARE XỬ LÝ LỖI TOÀN CỤC (CỦA MINH HIẾU)
+// MIDDLEWARE XỬ LÝ LỖI TOÀN CỤC 
 // ==========================================
 app.use((err, req, res, next) => {
   console.error("❌ Lỗi server:", err);

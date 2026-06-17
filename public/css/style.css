@@ -43,3 +43,22 @@ body { font-family: 'Inter', sans-serif; background-color: #f8fafc; height: 100v
 
 .modal-active { overflow: hidden; }
 .text-primary:hover { color: #0d9488; }
+
+.choices {position: relative; z-index: 10;}
+.choices__inner { background-color: #f8fafc !important; border-radius: 0.75rem !important;border: none !important; padding: 6px 12px !important; min-height: 48px !important; display: flex !important; align-items: center !important; font-size: 0.875rem !important; color: #475569 !important; }
+.choices__list--dropdown {z-index: 999 !important; border-radius: 0.75rem !important; border: 1px solid #e2e8f0 !important; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1) !important }
+.choices.is-focused .choices__inner {border: 2px solid #0d9488 !important; box-shadow: 0 0 0 2px rgba(13, 148, 136, 0.1) !important; }
+
+.report-card {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 220px;
+}
+.report-card-value {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.report-card-label {
+  min-height: 52px;
+}
