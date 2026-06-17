@@ -12,7 +12,7 @@ var currentSpaceId = null;
 var selectedBranchFiles = [];
 var selectedSpaceFiles = [];
 
-const SPACE_STATUS_LABELS = {
+var SPACE_STATUS_LABELS = {
     available: "Sẵn sàng",
     maintenance: "Bảo trì",
     inactive: "Tạm ngừng hoạt động",
@@ -22,7 +22,7 @@ const SPACE_STATUS_LABELS = {
     suspended: "Tạm ngừng hoạt động"
 };
 
-const CATEGORY_LABELS = {
+var CATEGORY_LABELS = {
     meeting_room: "Phòng họp",
     desk: "Chỗ ngồi tự do",
     office: "Văn phòng",
@@ -847,13 +847,20 @@ function renderBookingsToTable(bookingsList) {
             }
         }
 
+        // ========================================================
+        // LOGIC THANH TOÁN (SINGLE SOURCE OF TRUTH - ĐỒNG BỘ VỚI CUSTOMER)
+        // ========================================================
         const total = booking.TotalAmount || booking.totalAmount || 0;
-        const deposit = booking.DepositAmount || booking.depositAmount || 0;
         
-        let percent = booking.percentagePaid !== undefined ? booking.percentagePaid : (total > 0 ? Math.round((deposit / total) * 100) : 0);
-        let actualPaid = deposit > 0 ? deposit : (total * percent / 100);
+        // Nhận phần trăm thanh toán trực tiếp từ Backend (ưu tiên percentPaid)
+        let percent = booking.percentPaid !== undefined ? booking.percentPaid 
+                      : (booking.percentagePaid !== undefined ? booking.percentagePaid : 0);
+        
+        // Tính tiền thực nhận dựa trên phần trăm
+        let actualPaid = (total * percent) / 100;
         let remaining = total - actualPaid;
 
+        // Ép 100% nếu đơn đã hoàn tất hoặc đang dùng (phòng hờ dữ liệu DB cũ)
         if (displayStatus === 'in-use' || displayStatus === 'completed') {
             percent = 100;
             actualPaid = total;
@@ -895,6 +902,9 @@ function renderBookingsToTable(bookingsList) {
             actionButtons = `<span class="text-slate-300 font-black text-lg">-</span>`;
         }
 
+        // ========================================================
+        // KẾT XUẤT HIỂN THỊ (RENDER UI)
+        // ========================================================
         let paymentUI = '';
         if (total === 0) {
             paymentUI = `

@@ -437,6 +437,16 @@ window.addEventListener('DOMContentLoaded', () => {
         if (reviewForm) {
             reviewForm.addEventListener('submit', async (e) => {
                 e.preventDefault();
+                
+                // --- BỔ SUNG: Vô hiệu hóa nút gửi để chống click đúp ---
+                const submitBtn = reviewForm.querySelector('button[type="submit"]');
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.innerHTML = 'Đang xử lý...';
+                    submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+                // --------------------------------------------------------
+
                 const userId = localStorage.getItem('userId');
                 const token = localStorage.getItem('token');
                 const bookingId = document.getElementById('rv-booking-id').value;
@@ -450,6 +460,7 @@ window.addEventListener('DOMContentLoaded', () => {
                         body: JSON.stringify({ rating, comment })
                     });
                     const data = await res.json();
+                    
                     if (res.ok) {
                         alert(data.message);
                         closeModal('modal-review');
@@ -459,10 +470,17 @@ window.addEventListener('DOMContentLoaded', () => {
                     }
                 } catch (error) {
                     alert('Có lỗi xảy ra, vui lòng thử lại.');
+                } finally {
+                    // --- BỔ SUNG: Mở khóa nút bấm trở lại khi API chạy xong dù lỗi hay thành công ---
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.innerHTML = 'Gửi đánh giá';
+                        submitBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                    }
+                    // -------------------------------------------------------------------------------
                 }
             });
         }
-
         const starLabels = document.querySelectorAll('#star-container label');
         starLabels.forEach((label, idx) => {
             label.addEventListener('click', () => {

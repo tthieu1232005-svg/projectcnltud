@@ -770,12 +770,14 @@ async function createBranchAndSpaces(req, res) {
   }
 }
 
+
 // ==========================================
-// CÁC HÀNH ĐỘNG XỬ LÝ ĐƠN (XÁC NHẬN - CHECKIN - HỦY)
+// LẤY DANH SÁCH ĐƠN HÀNG HOST (ĐÃ ĐỒNG BỘ LOGIC THANH TOÁN 30/100%)
 // ==========================================
 async function getHostBookings(req, res) {
   try {
     const currentTime = new Date();
+    // Tự động chuyển đơn hết giờ thành completed
     await Booking.updateMany(
       { $or: [{ Status: 'in-use' }, { status: 'in-use' }], $or: [{ EndTime: { $lt: currentTime } }, { endTime: { $lt: currentTime } }] },
       { $set: { Status: 'completed', status: 'completed' } }
@@ -783,6 +785,7 @@ async function getHostBookings(req, res) {
 
     const hostId = getHostIdFromToken(req);
     
+    // 1. Lấy danh sách Bookings
     const bookings = await Booking.find({ $or: [{ HostID: hostId }, { hostID: hostId }] })
       .populate({ path: 'CustomerID', select: 'email Email FullName fullName', strictPopulate: false })
       .populate({
@@ -792,12 +795,37 @@ async function getHostBookings(req, res) {
       })
       .sort({ createdAt: -1 }).lean();
 
-    return res.json({ bookings });
+    // 2. TRUY VẤN LỊCH SỬ THANH TOÁN (GOM CẢ PENDING ĐỂ LẤY PAYMENT_TYPE)
+    const bookingIds = bookings.map(b => b._id);
+    const payments = await PaymentHistory.find({ BookingID: { $in: bookingIds } }).lean();
+
+    // 3. Thuật toán quét chọn % thanh toán cao nhất
+    const bookingPercentMap = {};
+    payments.forEach(p => {
+        const bId = p.BookingID.toString();
+        const type = p.PaymentType;
+
+        if (type === 'full_payment' || type === 'remaining_balance') {
+            bookingPercentMap[bId] = 100; // Thanh toán full hoặc tất toán nốt là 100%
+        } else if (type === 'deposit') {
+            // Cọc thì 30% (nếu chưa có lệnh 100%)
+            if (bookingPercentMap[bId] !== 100) {
+                bookingPercentMap[bId] = 30;
+            }
+        }
+    });
+
+    // 4. Ghép phần trăm vào kết quả trả về cho Frontend
+    const result = bookings.map(b => {
+        const percentPaid = bookingPercentMap[b._id.toString()] || 0;
+        return { ...b, percentPaid };
+    });
+
+    return res.json({ bookings: result });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
-
 async function confirmBooking(req, res) {
   try {
     const { bookingId } = req.params;

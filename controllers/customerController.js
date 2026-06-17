@@ -453,7 +453,9 @@ async function payRemainder(req, res) {
 // KHU VỰC 4: API ĐÁNH GIÁ (REVIEW)
 // ==========================================
 
-// Logic Submit chặt chẽ của BẠN (7 days rule + Ghi log)
+// ==========================================
+// API ĐÁNH GIÁ (ĐÃ BỌC THÉP CHỐNG LỖI CLICK ĐÚP - RACE CONDITION)
+// ==========================================
 async function submitReview(req, res) {
     try {
         const { userId, bookingId } = req.params;
@@ -467,6 +469,7 @@ async function submitReview(req, res) {
         let review = await Review.findOne({ BookingID: bookingId });
 
         if (review) {
+            // Xử lý CẬP NHẬT (Sửa đánh giá)
             const daysSinceReview = (new Date() - new Date(review.createdAt)) / (1000 * 3600 * 24);
             if (daysSinceReview > 7) {
                 return res.status(400).json({ error: 'Đã quá 7 ngày, bạn không thể chỉnh sửa đánh giá.' });
@@ -478,15 +481,26 @@ async function submitReview(req, res) {
             await logActivity(userId, 'UPDATE_REVIEW', 'Review', review._id, `Khách hàng vừa cập nhật đánh giá cho đơn hàng`, 'info');
             return res.json({ message: 'Cập nhật đánh giá thành công!', review });
         } else {
-            review = await Review.create({
-                SpaceID: booking.SpaceID,
-                CustomerID: userId,
-                BookingID: bookingId,
-                Rating: rating,
-                Comment: comment
-            });
-            await logActivity(userId, 'SUBMIT_REVIEW', 'Review', review._id, `Khách hàng đã đánh giá không gian ${rating} sao`, 'info');
-            return res.json({ message: 'Cảm ơn bạn đã đánh giá!', review });
+            // Xử lý LƯU MỚI (Bọc Try-Catch để bắt lỗi E11000)
+            try {
+                review = await Review.create({
+                    SpaceID: booking.SpaceID,
+                    CustomerID: userId,
+                    BookingID: bookingId,
+                    Rating: rating,
+                    Comment: comment
+                });
+                await logActivity(userId, 'SUBMIT_REVIEW', 'Review', review._id, `Khách hàng đã đánh giá không gian ${rating} sao`, 'info');
+                return res.json({ message: 'Cảm ơn bạn đã đánh giá!', review });
+                
+            } catch (createErr) {
+                // Nếu MongoDB ném lỗi trùng lặp key (E11000)
+                if (createErr.code === 11000) {
+                    return res.status(400).json({ error: 'Hệ thống đang xử lý, đánh giá của bạn đã được ghi nhận!' });
+                }
+                // Nếu là lỗi khác thì ném ra ngoài để khối catch tổng xử lý
+                throw createErr; 
+            }
         }
     } catch (error) {
         return sendServerError(res, error);
