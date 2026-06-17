@@ -6,7 +6,7 @@ const menus = {
     'customer': [
         { id: 'home', label: 'Trang chủ', icon: '🏠' }, 
         { id: 'history', label: 'Lịch sử đặt', icon: '📅' }, 
-        { id: 'payment_history', label: 'Lịch sử ví', icon: '💳' }, 
+        { id: 'payment_history', label: 'Lịch sử thanh toán', icon: '💳' }, 
         { id: 'profile', label: 'Hồ sơ', icon: '👤' }
     ], 
     'host': [

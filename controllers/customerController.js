@@ -41,18 +41,26 @@ async function getHomePage(req, res) {
   }
 }
 
+// ==========================================
+// TÌM KIẾM CƠ SỞ (ĐÃ MỞ RỘNG TÌM THEO ĐỊA CHỈ)
+// ==========================================
 async function searchBranches(req, res){
   try {
     const { location } = req.query;
     let query = { Status: 'active' };
+    
     if (location && location.trim()) {
+      // Dùng Regex để tìm kiếm từ khóa không phân biệt hoa thường (i)
       query.$or = [
+        { Name: { $regex: location, $options: 'i'} },
+        { Address: { $regex: location, $options: 'i'} }, 
         { District: { $regex: location, $options: 'i'} },
-        { City: { $regex: location, $options: 'i'} },
-        { Name: { $regex: location, $options: 'i'} }
+        { City: { $regex: location, $options: 'i'} }
       ];
     }
+    
     const branches = await Branch.find(query).lean();
+    
     res.render('customer/search', { 
       branches, 
       keyword: location || "",
