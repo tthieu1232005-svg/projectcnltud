@@ -27,10 +27,8 @@
                     </h4>
 
                     <p class="text-sm text-slate-500 mt-2">
-                        📍 <%= branch.Address %>
+                        📍 <%= branch.Address ? branch.Address.replace(/(,\s*)+$/, '') : 'Chưa cập nhật địa chỉ' %>
                     </p>
-
-                   
 
                     <% if (branch.Description) { %>
                         <p class="text-sm text-slate-600 mt-3 line-clamp-2">
@@ -43,7 +41,7 @@
                     </p>
 
                     <div class="flex items-center gap-1 text-amber-500 text-sm mt-2 font-semibold">
-                        ⭐ <%= branch.RatingAvg || 0 %>/5
+                        ⭐ <%= Number(branch.RatingAvg || 0).toFixed(1) %>/5
                     </div>
 
                 </div>
