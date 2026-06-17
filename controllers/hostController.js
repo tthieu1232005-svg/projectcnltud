@@ -808,29 +808,20 @@ async function confirmBooking(req, res) {
       return res.status(400).json({ error: 'Đơn hàng này không ở trạng thái chờ xác nhận.' });
     }
 
+    // 1. Chuyển trạng thái Booking sang 'confirmed'
     await Booking.updateOne({ _id: bookingId }, { $set: { Status: 'confirmed', status: 'confirmed' } });
 
-    const total = booking.TotalAmount || booking.totalAmount || 0;
-    const deposit = booking.DepositAmount || 0;
-    const amountReceived = booking.percentagePaid !== undefined ? (total * booking.percentagePaid) / 100 : deposit;
-    const paymentType = (booking.percentagePaid === 100 || deposit >= total) ? 'full_payment' : 'deposit';
-
+    // 2. ĐỒNG BỘ TÀI CHÍNH: Quét tất cả biên lai đang 'pending' của đơn này và chuyển thành 'successful'
     try {
-      await PaymentHistory.create({
-        BookingID: booking._id,
-        CustomerID: booking.CustomerID || booking.customerID,
-        HostID: booking.HostID || booking.hostID,
-        TransactionCode: `TXN-CONFIRM-${Math.floor(100000 + Math.random() * 900000)}`,
-        Amount: amountReceived,
-        PaymentType: paymentType,
-        PaymentMethod: 'bank_transfer',
-        Status: 'successful'
-      });
+      await PaymentHistory.updateMany(
+        { BookingID: bookingId, Status: 'pending' },
+        { $set: { Status: 'successful', PaidAt: new Date() } }
+      );
     } catch (pErr) {
-      console.warn('⚠️ Lịch sử thanh toán lỗi không nghiêm trọng:', pErr.message);
+      console.warn('⚠️ Lỗi đồng bộ lịch sử thanh toán (Confirm):', pErr.message);
     }
     
-    const hostId = req.user.id || req.user._id || req.user.userId;
+    const hostId = req.user?.id || req.user?._id || req.user?.userId || booking.HostID;
     await logActivity(hostId, 'CONFIRM_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã xác nhận đơn đặt chỗ`, 'success');
 
     emitBookingUpdate(bookingId, 'confirmed');
@@ -878,9 +869,20 @@ async function cancelBooking(req, res) {
       return res.status(400).json({ error: 'Chỉ có thể hủy đơn đang chờ hoặc đơn đã xác nhận.' });
     }
 
+    // 1. Chuyển trạng thái Booking sang 'cancelled'
     await Booking.updateOne({ _id: bookingId }, { $set: { Status: 'cancelled', status: 'cancelled' } });
     
-    const hostId = getHostIdFromToken(req);
+    // 2. ĐỒNG BỘ TÀI CHÍNH: Chuyển toàn bộ biên lai liên quan thành 'refunded' (Đã hoàn tiền)
+    try {
+      await PaymentHistory.updateMany(
+        { BookingID: bookingId },
+        { $set: { Status: 'refunded' } }
+      );
+    } catch (pErr) {
+      console.warn('⚠️ Lỗi đồng bộ lịch sử thanh toán (Cancel):', pErr.message);
+    }
+
+    const hostId = getHostIdFromToken(req) || booking.HostID;
     await logActivity(hostId, 'CANCEL_BOOKING', 'Booking', booking._id, `Chủ cơ sở đã huỷ đơn đặt chỗ`, 'danger');
 
     emitBookingUpdate(bookingId, 'cancelled');

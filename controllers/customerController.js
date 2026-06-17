@@ -206,52 +206,9 @@ async function updateMyProfile(req, res) {
 // KHU VỰC 3: API QUẢN LÝ ĐƠN HÀNG (KẾT HỢP)
 // ==========================================
 
-async function getCustomerBookings(req, res) {
-  try {
-    const { userId } = req.params;
-    if (!userId) return res.status(400).json({ error: 'Thiếu userId.' });
-
-    // Nested Populate lấy Branch của Na + Review Logic của Bạn
-    const bookings = await Booking.find({ CustomerID: userId })
-      .populate({
-        path: 'SpaceID',
-        select: 'Name Images SpaceCode BranchID PricePerHour',
-        populate: { path: 'BranchID', select: 'Name Address Hotline' }
-      })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    const bookingIds = bookings.map(b => b._id);
-    const reviews = await Review.find({ BookingID: { $in: bookingIds } }).lean();
-    const reviewMap = {};
-    reviews.forEach(r => reviewMap[r.BookingID.toString()] = r);
-
-    const now = new Date();
-    
-    const result = bookings.map(b => {
-       const review = reviewMap[b._id.toString()];
-       let canReview = false;
-       let canEditReview = false;
-       
-       if (b.Status === 'completed' || b.status === 'completed') {
-           if (!review) {
-               canReview = true;
-           } else {
-               const daysSinceReview = (now - new Date(review.createdAt)) / (1000 * 3600 * 24);
-               if (daysSinceReview <= 7) canEditReview = true;
-           }
-       }
-       return { ...b, ReviewData: review, canReview, canEditReview };
-    });
-
-    return res.json({ bookings: result });
-  } catch (error) {
-    return sendServerError(res, error);
-  }
-}
 
 // ==========================================
-// 1. KIỂM TRA PHÒNG TRỐNG (ĐÃ FIX TIME TRAVEL, OVERLAP & LỆCH MÚI GIỜ)
+// 1. KIỂM TRA PHÒNG TRỐNG (BẢN CHUẨN - ĐÃ FIX MÚI GIỜ VÀ LOGIC TÌM KIẾM)
 // ==========================================
 async function checkAvailability(req, res) {
   try {
@@ -264,7 +221,7 @@ async function checkAvailability(req, res) {
     const [startStr, endStr] = timeSlot.split(' - ');
     if (!startStr || !endStr) return res.status(400).json({ error: 'Định dạng khung giờ không hợp lệ' });
 
-    // [BẮT BUỘC]: Ép múi giờ +07:00 để MongoDB không bị lệch giờ (Tránh Timezone Bug)
+    // [QUAN TRỌNG NHẤT]: Bắt buộc phải có +07:00 để đồng bộ với toISOString() của Frontend!
     const start = new Date(`${date}T${startStr}:00+07:00`);
     const end = new Date(`${date}T${endStr}:00+07:00`);
 
@@ -272,42 +229,48 @@ async function checkAvailability(req, res) {
       return res.status(400).json({ error: 'Ngày hoặc giờ không hợp lệ' });
     }
 
-    // Lấy thời gian hiện tại chính xác (Tránh bug đặt phòng ngay phút hiện tại)
+    // [BẢO MẬT]: Chặn tra cứu quá khứ bằng mili-giây để không bị dính lỗi múi giờ Server
     const now = new Date();
-    
-    // [BẢO MẬT]: Chặn quá khứ
-    if (start < now) {
+    if (start.getTime() < now.getTime()) {
       return res.status(400).json({ error: 'Không thể tra cứu phòng trống ở thời điểm trong quá khứ' });
     }
 
     const category = (roomType === 'meeting') ? 'meeting_room' : 'desk';
 
-    // 1. Lấy tất cả phòng đang Sẵn sàng thuộc loại này
+    // BƯỚC 1: TÌM TẤT CẢ PHÒNG THUỘC CHI NHÁNH VÀ ĐÚNG LOẠI
     const allSpaces = await Space.find({
       BranchID: branchId,
       Category: category,
       Status: 'available' 
     }).lean();
 
-    // 2. Tìm TẤT CẢ các Booking đụng lịch trong khung giờ này
-    // Điều kiện $lt (nhỏ hơn) và $gt (lớn hơn) dùng để bắt chéo thời gian
+    // Nếu chi nhánh này không có phòng nào loại này, trả về rỗng ngay
+    if (allSpaces.length === 0) {
+        return res.json({ spaces: [], total: 0 });
+    }
+
+    // Gom danh sách ID của các phòng này lại
+    const spaceIdsInBranch = allSpaces.map(s => s._id);
+
+    // BƯỚC 2: TÌM CÁC ĐƠN HÀNG "CẤN LỊCH" DỰA TRÊN TẬP HỢP SPACE_ID THỰC TẾ
     const busyBookings = await Booking.find({
-      BranchID: branchId,
-      Status: { $in: ['pending', 'confirmed', 'in-use'] }, // Không đếm phòng đã Cancel hoặc Completed
+      SpaceID: { $in: spaceIdsInBranch },
+      Status: { $in: ['pending', 'confirmed', 'in-use'] }, 
       StartTime: { $lt: end },
       EndTime: { $gt: start }
     }).select('SpaceID').lean();
 
-    // 3. Lọc ra những phòng TRỐNG (Không nằm trong danh sách bận)
-    const busySpaceIds = new Set(busyBookings.map(b => b.SpaceID.toString()));
-    const availableSpaces = allSpaces.filter(space => !busySpaceIds.has(space._id.toString()));
+    // Ép kiểu ID về chuỗi (String) để thuật toán Filter phía dưới không bị lỗi Object Reference
+    const busySpaceIds = busyBookings.map(b => b.SpaceID.toString());
+
+    // BƯỚC 3: LỌC RA NHỮNG PHÒNG TRỐNG THẬT SỰ
+    const availableSpaces = allSpaces.filter(space => !busySpaceIds.includes(space._id.toString()));
 
     return res.json({ spaces: availableSpaces, total: availableSpaces.length });
   } catch (error) {
     return sendServerError(res, error);
   }
 }
-
 // ==========================================
 // 2. TẠO ĐƠN HÀNG MỚI (ĐÃ FIX STATUS & RÀNG BUỘC THỜI GIAN)
 // ==========================================
@@ -575,7 +538,81 @@ async function getBranchReviews(req, res) {
 
 
 // ==========================================
-// RENDER TRANG LỊCH SỬ THANH TOÁN (SSR)
+// API QUẢN LÝ ĐƠN HÀNG (ĐỊNH NGHĨA % THEO PAYMENT_TYPE)
+// ==========================================
+async function getCustomerBookings(req, res) {
+  try {
+    const { userId } = req.params;
+    if (!userId) return res.status(400).json({ error: 'Thiếu userId.' });
+
+    // 1. Lấy thông tin Bookings
+    const bookings = await Booking.find({ CustomerID: userId })
+      .populate({
+        path: 'SpaceID',
+        select: 'Name Images SpaceCode BranchID PricePerHour',
+        populate: { path: 'BranchID', select: 'Name Address Hotline' }
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const bookingIds = bookings.map(b => b._id);
+
+    // 2. Lấy thông tin Reviews
+    const reviews = await Review.find({ BookingID: { $in: bookingIds } }).lean();
+    const reviewMap = {};
+    reviews.forEach(r => reviewMap[r.BookingID.toString()] = r);
+
+    // 3. TRUY VẤN LỊCH SỬ THANH TOÁN (GOM CẢ PENDING ĐỂ LẤY PAYMENT_TYPE)
+    const payments = await PaymentHistory.find({
+        BookingID: { $in: bookingIds }
+    }).lean();
+
+    // Thuật toán quét chọn % cao nhất dựa trên PaymentType thu được
+    const bookingPercentMap = {};
+    payments.forEach(p => {
+        const bId = p.BookingID.toString();
+        const type = p.PaymentType;
+
+        if (type === 'full_payment' || type === 'remaining_balance') {
+            bookingPercentMap[bId] = 100; // Thanh toán full hoặc tất toán nốt đều là 100%
+        } else if (type === 'deposit') {
+            // Nếu trước đó chưa ghi nhận lệnh 100% thì đặt là 30%
+            if (bookingPercentMap[bId] !== 100) {
+                bookingPercentMap[bId] = 30;
+            }
+        }
+    });
+
+    const now = new Date();
+    
+    // 4. Ghép nối dữ liệu trả về cho Frontend
+    const result = bookings.map(b => {
+       const review = reviewMap[b._id.toString()];
+       let canReview = false;
+       let canEditReview = false;
+       
+       if (b.Status === 'completed' || b.status === 'completed') {
+           if (!review) {
+               canReview = true;
+           } else {
+               const daysSinceReview = (now - new Date(review.createdAt)) / (1000 * 3600 * 24);
+               if (daysSinceReview <= 7) canEditReview = true;
+           }
+       }
+
+       // Lấy phần trăm đã được phân loại từ bản đồ mapping ở trên
+       const percentPaid = bookingPercentMap[b._id.toString()] || 0;
+
+       return { ...b, ReviewData: review, canReview, canEditReview, percentPaid };
+    });
+
+    return res.json({ bookings: result });
+  } catch (error) {
+    return sendServerError(res, error);
+  }
+}
+// ==========================================
+// RENDER TRANG LỊCH SỬ THANH TOÁN (SSR - TRUY VẤN DÒNG TIỀN)
 // ==========================================
 async function getPaymentHistoryPage(req, res) {
     try {
@@ -584,24 +621,16 @@ async function getPaymentHistoryPage(req, res) {
 
         const { branchKeyword, startDate, statusFilter } = req.query;
         
-        let query = { 
-            $or: [
-                { CustomerID: userId },
-                { CustomerID: new mongoose.Types.ObjectId(userId) },
-                { customerID: userId }
-            ]
-        };
+        let query = { CustomerID: userId };
 
         const statusMap = {
-            'Thành công': ['confirmed', 'completed', 'in-use'],
-            'Thất bại': ['cancelled'],
+            'Thành công': ['successful'],
+            'Thất bại': ['failed'],
             'Chờ xử lý': ['pending']
         };
 
         if (statusFilter && statusFilter !== 'Tất cả') {
-            query.Status = { $in: statusMap[statusFilter] || ['confirmed', 'cancelled', 'completed', 'pending', 'in-use'] };
-        } else {
-            query.Status = { $in: ['confirmed', 'cancelled', 'completed', 'pending', 'in-use'] };
+            query.Status = { $in: statusMap[statusFilter] || ['successful', 'failed', 'pending'] };
         }
 
         if (startDate) {
@@ -610,14 +639,17 @@ async function getPaymentHistoryPage(req, res) {
             query.createdAt = { $gte: startOfDay };
         }
 
-        let bookings = await Booking.find(query)
-            .populate('SpaceID', 'Name name Images')
+        let payments = await PaymentHistory.find(query)
+            .populate({
+                path: 'BookingID',
+                populate: { path: 'SpaceID', select: 'Name name' }
+            })
             .sort({ createdAt: -1 })
             .lean();
 
         if (branchKeyword) {
-            bookings = bookings.filter(b => {
-                const spaceName = b.SpaceID?.Name || b.SpaceID?.name || '';
+            payments = payments.filter(p => {
+                const spaceName = p.BookingID?.SpaceID?.Name || p.BookingID?.SpaceID?.name || '';
                 return spaceName.toLowerCase().includes(branchKeyword.toLowerCase());
             });
         }
@@ -625,14 +657,14 @@ async function getPaymentHistoryPage(req, res) {
         const allSpaces = await Space.find({}).select('Name name').lean();
 
         res.render('customer/payment_history', { 
-            bookings, 
+            payments, 
             filters: { branchKeyword: branchKeyword || '', startDate: startDate || '', statusFilter: statusFilter || 'Tất cả' },
             allSpaces,
             userId: userId,
             scripts: '<script src="/js/customer-main.js"></script>'
         });
     } catch (error) {
-        console.error("Lỗi payment_history:", error);
+        console.error("Lỗi payment_history Controller:", error);
         res.status(500).send("Lỗi kết nối CSDL: " + error.message);
     }
 }

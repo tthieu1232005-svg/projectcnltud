@@ -216,14 +216,15 @@ function renderCustomerBookings(list) {
         }
         else { stBadge = 'Đã hủy'; stColor = 'bg-slate-200 text-slate-600'; }
 
+        // --- 🛠️ LOGIC TÍNH % THANH TOÁN (GỌN NHẸ THEO PAYMENT_TYPE TỪ BACKEND) ---
         const total = booking.TotalAmount || 0;
-        let deposit = booking.DepositAmount || 0;
-
-        if (displayStatus === 'in-use' || displayStatus === 'completed') {
-            deposit = total;
-        }
-
-        const percent = total > 0 ? Math.round((deposit / total) * 100) : 0;
+        const percent = booking.percentPaid || 0; // Lấy trực tiếp % từ Backend truyền sang
+        
+        // Xác định màu sắc hiển thị dựa trên tỷ lệ % cố định (0, 30, hoặc 100)
+        let percentColor = 'text-slate-400'; // Mặc định xám (0%)
+        if (percent === 30) percentColor = 'text-amber-600'; // Cam (đã cọc)
+        if (percent === 100) percentColor = 'text-emerald-600'; // Xanh ngọc (đã full)
+        // --------------------------------------------------------------------------
 
         let actionUI = `<button onclick="openDetailModal('${booking._id}')" class="w-full py-1 rounded-xl border-2 border-slate-200 text-slate-500 font-black text-[10px] uppercase hover:border-slate-400 transition whitespace-nowrap">Xem chi tiết</button>`;
         
@@ -274,7 +275,7 @@ function renderCustomerBookings(list) {
                     <div class="mb-4 md:mb-0">
                         <div class="text-[10px] font-black text-slate-400 uppercase mb-1">Tổng chi phí</div>
                         <div class="text-xl font-black text-slate-800">${total.toLocaleString('vi-VN')}đ</div>
-                        <div class="text-[10px] font-bold text-amber-600 mt-1">Đã thanh toán: ${percent}%</div>
+                        <div class="text-[10px] font-bold ${percentColor} mt-1">Đã thanh toán: ${percent}%</div>
                     </div>
                     <div class="flex flex-col mt-auto w-full pt-1">
                         ${actionUI}
@@ -285,7 +286,6 @@ function renderCustomerBookings(list) {
 
     startLiveTimers(); 
 }
-
 // ==========================================
 // 4. XỬ LÝ MODAL (POPUP) CHI TIẾT & ĐÁNH GIÁ
 // ==========================================
@@ -314,7 +314,6 @@ function openDetailModal(id) {
     document.getElementById('md-time').textContent = `${start.toLocaleDateString('vi-VN')} | ${start.getHours()}:${String(start.getMinutes()).padStart(2,'0')} - ${end.getHours()}:${String(end.getMinutes()).padStart(2,'0')}`;
     
     const total = booking.TotalAmount || 0;
-    let deposit = booking.DepositAmount || 0;
 
     let displayStatus = booking.Status || booking.status;
     const now = new Date();
