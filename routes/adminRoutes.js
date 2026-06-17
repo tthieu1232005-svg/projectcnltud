@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const adminController = require('../controllers/adminController');
+const { getAdminDashboard, listUsers, toggleUserStatus, getPendingHosts, verifyHost } = require('../controllers/adminController');
 const { verifyToken, requireAdmin } = require('../middlewares/authMiddleware');
 
 // 🔒 Áp dụng ổ khóa bảo vệ cho TOÀN BỘ API của Admin bên dưới
@@ -26,5 +27,11 @@ router.get('/activity-logs', adminController.getActivityLogs);
 
 // API để lấy dữ liệu chi tiết cho Popup
 router.get('/entity-detail', adminController.getEntityDetail);
+
+// API để thay đổi trạng thái user
+router.patch('/users/:id/toggle-status', toggleUserStatus);
+// API để lấy danh sách host đang chờ phê duyệt và phê duyệt host
+router.get('/pending-hosts', getPendingHosts);
+router.patch('/hosts/:id/verify', verifyHost);
 
 module.exports = router;

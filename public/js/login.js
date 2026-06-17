@@ -32,8 +32,12 @@ async function handleLogin(event) {
             localStorage.setItem('userName', data.user.fullName); // Lưu tên để hiển thị trên UI
             localStorage.setItem('userId', data.user.id); // LƯU LẠI ID DỰ PHÒNG CHỐNG LỖI UI CŨ
             
+            // Lưu mảng đối tượng của Na (Phòng hờ cho việc lấy Avatar hay thông tin khác sau này)
+            localStorage.setItem('user', JSON.stringify(data.user)); 
 
+            // RẤT QUAN TRỌNG: Lưu Cookie cho hệ thống Render EJS của Backend đọc (Của Bạn)
             document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Strict`;
+
             // ĐIỀU HƯỚNG DỰA TRÊN VAI TRÒ (ROLE-BASED ROUTING)
             setTimeout(() => {
                 if (data.user.role === 'host') {

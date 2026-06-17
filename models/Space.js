@@ -8,7 +8,7 @@ const spaceSchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    HostID: { // Lưu thêm HostID để Host lọc danh sách phòng của mình cực nhanh
+    HostID: { // Lưu thêm HostID để Host lọc danh sách phòng của mình nhanh
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User', 
         required: true,
@@ -88,7 +88,7 @@ const spaceSchema = new mongoose.Schema({
     timestamps: true
 });
 
-// 6. CHỈ MỤC PHỨC HỢP ĐỘC QUYỀN (UNIQUE COMPOSITE INDEX) - CỰC KỲ QUAN TRỌNG
+// 6. CHỈ MỤC PHỨC HỢP ĐỘC QUYỀN (UNIQUE COMPOSITE INDEX) 
 // Báo cho MongoDB biết: "Trong CÙNG MỘT Chi nhánh, không được có 2 phòng trùng Mã"
 // Nhưng 2 Chi nhánh khác nhau thì CÓ THỂ dùng chung một Mã phòng.
 spaceSchema.index({ BranchID: 1, SpaceCode: 1 }, { unique: true });

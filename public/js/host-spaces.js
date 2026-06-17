@@ -2,16 +2,15 @@
 // QUẢN LÝ CƠ SỞ & KHÔNG GIAN (HOST SPACES)
 // =======================================================
 
-// --- BIẾN TOÀN CỤC CỦA BẠN ---
+// --- BIẾN TOÀN CỤC ---
 var addFacilityDraft = { imageFile: null, spaces: [] };
-var wizardSpaceFiles = {}; // Lưu trữ File ảnh cho từng không gian trong Wizard
+var wizardSpaceFiles = {}; 
 var addFacilitySpaceCounter = 0;
 var currentBranchId = null;
 var currentSpaceId = null;
 
-// --- BIẾN TOÀN CỤC CỦA MINH HIẾU (ĐỂ XỬ LÝ ẢNH LOCAL) ---
-let selectedBranchFiles = [];
-let selectedSpaceFiles = [];
+var selectedBranchFiles = [];
+var selectedSpaceFiles = [];
 
 const SPACE_STATUS_LABELS = {
     available: "Sẵn sàng",
@@ -127,7 +126,6 @@ async function openFacilityMgmt(branchId) {
     currentBranchId = branchId;
     showHostSpaceLayer('space-mgr-layer-2');
     
-    // Reset file rác
     selectedBranchFiles = [];
     const fileInput = document.getElementById("branch-img-input");
     if (fileInput) fileInput.value = "";
@@ -148,7 +146,6 @@ async function openFacilityMgmt(branchId) {
             if (addrEl) addrEl.value = branch.Address || "";
             if (noteEl) noteEl.value = branch.Description || "";
             
-            // Xử lý ảnh bằng logic của Minh-Hiếu
             const mainImgContainer = document.getElementById("branch-main-img-container") || document.getElementById("branch-main-img");
             if (mainImgContainer) {
                 if (branch.Images && branch.Images.length > 0) {
@@ -169,7 +166,6 @@ async function openFacilityMgmt(branchId) {
     }
 }
 
-// LOGIC XỬ LÝ ẢNH CƠ SỞ (CỦA MINH-HIẾU)
 async function deleteExistingBranchImage(imgUrl) {
     if (!confirm("Bạn có chắc muốn xóa tấm ảnh này khỏi hệ thống?")) return;
     const token = localStorage.getItem('token');
@@ -235,7 +231,7 @@ async function saveBranchInfo() {
     try {
         const res = await fetch(`/api/hosts/branches/${currentBranchId}`, {
             method: "PUT",
-            headers: { 'Authorization': `Bearer ${token}` }, // FormData tự xử lý Content-Type
+            headers: { 'Authorization': `Bearer ${token}` }, 
             body: formData,
         });
         
@@ -436,7 +432,6 @@ async function loadSpaceBookings(spaceId) {
 }
 
 // ==================== TẠO MỚI CƠ SỞ (WIZARD CỦA BẠN - GIAO DIỆN HEAD) ====================
-// Sửa đổi gửi FormData tuần tự theo chuẩn Minh-Hiếu
 function startAddFacility() {
     addFacilityDraft = { imageFile: null, spaces: [] };
     wizardSpaceFiles = {};
@@ -474,12 +469,11 @@ function setAddFacilityStep(step) {
     }
 }
 
-// Lưu file thô vào biến để gửi FormData
 function previewFacilityImage(input) {
     const file = input.files && input.files[0];
     const preview = document.getElementById('add-fac-image-preview');
     if (!file || !preview) return;
-    addFacilityDraft.imageFile = file; // Lưu file gốc
+    addFacilityDraft.imageFile = file; 
     const reader = new FileReader();
     reader.onload = e => {
         preview.innerHTML = `<img src="${e.target.result}" alt="" class="w-full h-full object-cover">`;
@@ -491,7 +485,7 @@ function previewSpaceImage(input, rowId) {
     const file = input.files && input.files[0];
     const preview = document.getElementById(`space-img-preview-${rowId}`);
     if (!file || !preview) return;
-    wizardSpaceFiles[rowId] = file; // Lưu file gốc
+    wizardSpaceFiles[rowId] = file; 
     const reader = new FileReader();
     reader.onload = e => {
         preview.innerHTML = `<img src="${e.target.result}" alt="" class="w-full h-full object-cover">`;
@@ -582,7 +576,6 @@ function formatPriceDisplay(raw) {
     return num;
 }
 
-// Bắn API Tuần tự theo Logic File Local
 async function saveNewFacility() {
     const name = document.getElementById('add-fac-name')?.value.trim();
     const address = document.getElementById('add-fac-address')?.value.trim();
@@ -595,7 +588,6 @@ async function saveNewFacility() {
         return;
     }
     
-    // Gửi Form Data của Cơ sở
     const formData = new FormData();
     formData.append("name", name);
     formData.append("address", address);
@@ -618,7 +610,6 @@ async function saveNewFacility() {
             return;
         }
 
-        // Tạo phòng tuần tự với Form Data
         const list = document.getElementById('add-facility-spaces-list');
         const cards = list.querySelectorAll('[data-row-id]');
         let spacesCount = 0;
@@ -653,7 +644,6 @@ async function saveNewFacility() {
 
         if(typeof showToast === 'function') showToast(`Đã tạo cơ sở "${name}" với ${spacesCount} không gian`);
         
-        // Tải lại giao diện
         showHostSpaceLayer('space-mgr-layer-1');
         await initHostSpacesPage();
 
@@ -665,7 +655,7 @@ async function saveNewFacility() {
 
 
 // =======================================================
-// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (CỦA BẠN - GIỮ NGUYÊN)
+// LOGIC ĐIỀU KHIỂN BẢNG ĐƠN ĐẶT CHỖ (HOST BOOKINGS)
 // =======================================================
 
 let allBookingsCache = []; 
@@ -931,8 +921,6 @@ function renderBookingsToTable(bookingsList) {
         }
 
         const displayEmail = customer.email || customer.Email || '<span class="text-rose-500">Lỗi dữ liệu khách</span>';
-        const displayCustName = customer.fullName || customer.FullName || '';
-        const nameUI = displayCustName ? `<div class="text-slate-800 font-bold text-xs mt-1">${displayCustName}</div>` : '';
 
         function getSpaceDisplayName(sp) {
             if (!sp || typeof sp !== 'object') return 'Chưa cập nhật tên Không gian';
@@ -949,9 +937,8 @@ function renderBookingsToTable(bookingsList) {
 
         return `
             <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
-                <td class="p-5">
+                <td class="p-5 font-bold text-slate-800">
                     <div class="text-teal-600 font-black">#${booking._id ? booking._id.substring(booking._id.length - 6).toUpperCase() : 'N/A'}</div>
-                    ${nameUI}
                     <div class="text-slate-500 text-[11px] font-medium mt-0.5">${displayEmail}</div>
                 </td>
                 
@@ -1132,9 +1119,124 @@ window.addEventListener('DOMContentLoaded', () => {
 if (typeof io !== 'undefined') {
     const socket = io();
     socket.on('booking_status_updated', (data) => {
-        console.log('Đơn hàng cập nhật (Host):', data);
         if (typeof loadHostBookings === 'function') {
             loadHostBookings();
         }
     });
+}
+
+
+// =======================================================
+// XỬ LÝ MODAL THÊM KHÔNG GIAN ĐƠN LẺ (KHI ĐÃ Ở TRONG 1 CƠ SỞ)
+// =======================================================
+
+let modalSpaceSelectedFiles = [];
+
+// Mở modal thêm không gian mới
+function openSpaceModal() {
+    if (!currentBranchId) {
+        if(typeof showToast === 'function') showToast("Vui lòng chọn 1 Cơ sở trước khi thêm Không gian!");
+        return;
+    }
+    
+    // Reset form
+    document.getElementById("modal-space-code").value = "";
+    document.getElementById("modal-space-name").value = "";
+    document.getElementById("modal-space-category").selectedIndex = 0;
+    document.getElementById("modal-space-price").value = "";
+    document.getElementById("modal-space-img-input").value = "";
+    
+    modalSpaceSelectedFiles = [];
+    document.getElementById("modal-space-img-preview").innerHTML = "";
+
+    // Hiển thị Modal
+    const modal = document.getElementById("modal-add-space");
+    if (modal) modal.classList.remove("hidden");
+}
+
+// Đóng modal
+function closeSpaceModal() {
+    const modal = document.getElementById("modal-add-space");
+    if (modal) modal.classList.add("hidden");
+}
+
+// Xem trước ảnh khi chọn trong Modal
+function previewModalSpaceImage(input) {
+    if (input.files && input.files.length > 0) {
+        modalSpaceSelectedFiles = [...modalSpaceSelectedFiles, ...Array.from(input.files)];
+    }
+    if (input) input.value = ""; 
+    
+    const previewContainer = document.getElementById("modal-space-img-preview");
+    if (!previewContainer) return;
+    
+    previewContainer.innerHTML = modalSpaceSelectedFiles.map((file, index) => `
+        <div class="relative w-16 h-16 inline-block mt-2 mr-2">
+            <img src="${URL.createObjectURL(file)}" class="w-full h-full object-cover rounded-xl border border-teal-400 shadow-sm">
+            <button type="button" onclick="removeModalSpaceFile(${index})" class="absolute -top-1.5 -right-1.5 bg-slate-600 text-white text-[9px] w-4 h-4 rounded-full flex items-center justify-center font-bold hover:bg-red-500 transition shadow">✕</button>
+        </div>
+    `).join("");
+}
+
+// Xóa ảnh đã chọn trong Modal
+function removeModalSpaceFile(index) {
+    modalSpaceSelectedFiles.splice(index, 1);
+    
+    // Kích hoạt lại hàm preview để vẽ lại UI
+    previewModalSpaceImage({ files: [] }); 
+}
+
+// Xử lý sự kiện submit Form để lưu Không gian mới qua API
+async function submitNewSpace(event) {
+    event.preventDefault(); // Ngăn trình duyệt reload lại trang
+
+    if (!currentBranchId) return;
+
+    // Lấy dữ liệu từ Form
+    const code = document.getElementById("modal-space-code").value.trim();
+    const name = document.getElementById("modal-space-name").value.trim();
+    const type = document.getElementById("modal-space-category").value;
+    const price = document.getElementById("modal-space-price").value;
+
+    if (!code || !name || !price) {
+        if(typeof showToast === 'function') showToast("Vui lòng điền đầy đủ các thông tin bắt buộc.");
+        return;
+    }
+
+    // Đóng gói dữ liệu
+    const formData = new FormData();
+    formData.append("spaceCode", code);
+    formData.append("name", name);
+    formData.append("type", type);
+    formData.append("price", String(price).replace(/\D/g, ""));
+    formData.append("status", "ready"); // Mặc định khi tạo mới là Sẵn sàng
+
+    // Đính kèm các ảnh đã chọn (Dùng tên 'spaceImage' để khớp với thiết lập Cloudinary của bạn)
+    if (modalSpaceSelectedFiles.length > 0) {
+    modalSpaceSelectedFiles.forEach((file) => formData.append("image", file));
+    }
+
+    const token = localStorage.getItem('token');
+    
+    try {
+        const response = await fetch(`/api/hosts/branches/${currentBranchId}/spaces`, {
+            method: "POST",
+            headers: { 'Authorization': `Bearer ${token}` },
+            body: formData,
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            if(typeof showToast === 'function') showToast(`Tạo không gian [${code}] thành công!`);
+            closeSpaceModal();
+            // Tải lại danh sách không gian của cơ sở hiện tại
+            loadSpaceList(currentBranchId); 
+        } else {
+            if(typeof showToast === 'function') showToast(data.error || "Có lỗi xảy ra khi tạo Không gian.");
+        }
+    } catch (error) {
+        console.error("Lỗi khi tạo Không gian:", error);
+        if(typeof showToast === 'function') showToast("Lỗi hệ thống. Không thể tạo Không gian.");
+    }
 }

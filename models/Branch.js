@@ -55,7 +55,7 @@ const branchSchema = new mongoose.Schema({
     },
 
     // 4. CHÍNH SÁCH VÀ ĐÁNH GIÁ
-    DepositPercentage: { 
+    DepositPercentage: { // Tỷ lệ cọc (0.3 = 30%)
         type: Number,
         min: 0,
         max: 1,
@@ -74,6 +74,7 @@ const branchSchema = new mongoose.Schema({
         enum: ['active', 'inactive', 'maintenance'],
         default: 'active',
         index: true
+        
     }
 
 }, {

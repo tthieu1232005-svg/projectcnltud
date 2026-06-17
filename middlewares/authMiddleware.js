@@ -1,22 +1,43 @@
 const jwt = require('jsonwebtoken');
 
+// Hàm hỗ trợ phân tích cookie từ nhánh Gia-Hung
+function parseCookies(cookieHeader = '') {
+    return cookieHeader.split(';').reduce((cookies, cookieString) => {
+        const [name, ...rest] = cookieString.trim().split('=');
+        if (!name) return cookies;
+        cookies[name] = decodeURIComponent(rest.join('='));
+        return cookies;
+    }, {});
+}
+
 /**
  * 1. Xác thực người dùng (Kiểm tra Token)
- * Kết hợp sự chặt chẽ của auth.js và tính linh hoạt của authMiddleware.js
+ * Kết hợp sự chặt chẽ của nhánh HEAD và khả năng đọc Cookie của nhánh Gia-Hung
  */
 const verifyToken = (req, res, next) => {
     try {
-        // Lấy token từ header 'Authorization' (Định dạng chuẩn: "Bearer <token>")
+        // Lấy token từ header 'Authorization'
         const authHeader = req.header('Authorization') || req.headers['authorization'];
+        let tokenFromHeader = null;
         
-        if (!authHeader || !authHeader.startsWith('Bearer ')) {
-            return res.status(401).json({ 
-                error: 'Truy cập bị từ chối. Vui lòng cung cấp Bearer Token.' 
-            });
+        if (authHeader && authHeader.startsWith('Bearer ')) {
+            tokenFromHeader = authHeader.split(' ')[1];
+        } else if (authHeader) {
+            tokenFromHeader = authHeader.split(' ')[1] || authHeader;
         }
 
-        // Tách lấy chuỗi token
-        const token = authHeader.split(' ')[1];
+        // Lấy token từ Cookie
+        const cookies = parseCookies(req.headers.cookie || '');
+        const tokenFromCookie = cookies.authToken || cookies.token;
+
+        // Ưu tiên Header, nếu không có thì lấy từ Cookie
+        const token = tokenFromHeader || tokenFromCookie;
+
+        if (!token) {
+            return res.status(401).json({ 
+                error: 'Không tìm thấy token xác thực. Vui lòng cung cấp Bearer Token hoặc đăng nhập để cấp Cookie.' 
+            });
+        }
 
         // Sử dụng secret từ .env, có fallback để tránh crash server
         const secret = process.env.JWT_SECRET || 'workhub_fallback_secret_key_2026';
@@ -43,13 +64,24 @@ const verifyToken = (req, res, next) => {
  */
 const authorizeRole = (...allowedRoles) => {
     return (req, res, next) => {
-        if (!req.user || !req.user.role) {
-            return res.status(403).json({ error: 'Không tìm thấy thông tin phân quyền.' });
+        // Chưa đăng nhập hoặc chưa có thông tin user
+        if (!req.user) {
+            return res.status(401).json({
+                error: 'Bạn cần đăng nhập để thực hiện thao tác này.'
+            });
         }
 
+        // Không có thông tin role
+        if (!req.user.role) {
+            return res.status(403).json({
+                error: 'Không tìm thấy thông tin phân quyền.'
+            });
+        }
+
+        // Role không được phép
         if (!allowedRoles.includes(req.user.role)) {
-            return res.status(403).json({ 
-                error: 'Bạn không có quyền (role) để truy cập tài nguyên này.' 
+            return res.status(403).json({
+                error: 'Bạn không có quyền truy cập tài nguyên này.'
             });
         }
 

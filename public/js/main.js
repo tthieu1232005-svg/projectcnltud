@@ -90,12 +90,11 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function updateUIBasedOnAuth() {
-    // 1. Lấy giấy thông hành từ tủ đồ
     const token = localStorage.getItem('token');
     const role = localStorage.getItem('userRole') || 'guest';
     const userName = localStorage.getItem('userName');
+    const userAvatar = localStorage.getItem('userAvatar'); // Của Na
 
-    // 2. Trỏ tới các thành phần UI
     const loginBtn = document.getElementById('nav-login-btn');
     const userInfo = document.getElementById('user-info');
     const nameDisplay = document.getElementById('user-display-name');
@@ -105,17 +104,17 @@ function updateUIBasedOnAuth() {
     const sidebar = document.getElementById('sidebar'); 
     const sidebarToggle = document.getElementById('sidebar-toggle'); 
 
-    // 3. Phân luồng hiển thị HEADER & SIDEBAR
     if (token) {
-        // TRƯỜNG HỢP 1: ĐÃ ĐĂNG NHẬP
-        
-        // Header
         if (loginBtn) loginBtn.classList.add('hidden');
         if (userInfo) userInfo.classList.remove('hidden');
 
         if (nameDisplay && userName) nameDisplay.textContent = userName;
+
+        // Ưu tiên Avatar thật, fallback về ui-avatars
         if (avatarPreview && userName) {
-            avatarPreview.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=0D8B8B&color=fff`;
+            avatarPreview.src = userAvatar
+                ? userAvatar
+                : `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=0D8B8B&color=fff`;
         }
 
         if (roleDisplay) {
@@ -131,21 +130,15 @@ function updateUIBasedOnAuth() {
             }
         }
 
-        // Sidebar
         if (sidebar) sidebar.classList.remove('hidden-permanent', 'collapsed'); 
         if (sidebarToggle) sidebarToggle.classList.remove('hidden');
         
-        // Vẽ lại Menu Sidebar
         renderMenu(role);
 
     } else {
-        // TRƯỜNG HỢP 2: CHƯA ĐĂNG NHẬP (KHÁCH VÃNG LAI)
-        
-        // Header
         if (loginBtn) loginBtn.classList.remove('hidden');
         if (userInfo) userInfo.classList.add('hidden');
         
-        // Sidebar (Khách thì ẩn Sidebar đi cho gọn)
         if (sidebar) sidebar.classList.add('hidden-permanent'); 
         if (sidebarToggle) sidebarToggle.classList.add('hidden');
     }
@@ -188,6 +181,8 @@ function logout() {
     localStorage.removeItem('userRole');
     localStorage.removeItem('userName');
     localStorage.removeItem('userId'); // Dọn dẹp cả ID dự phòng
+    localStorage.removeItem('userAvatar'); // Dọn dẹp cả Avatar của Na
+    localStorage.removeItem('user'); // Dọn dẹp cục object user
     document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
     window.location.href = '/login';
 }
